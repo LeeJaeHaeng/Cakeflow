@@ -1,26 +1,120 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
+/* ── CakeFlow Design Tokens ── */
 @theme inline {
+  /* Semantic color aliases */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Brand tokens */
+  --color-cake-caramel: #D4A574;
+  --color-cake-pink: #E8B4B8;
+  --color-cake-coral: #C8534A;
+  --color-cake-green: #6B9F71;
+  --color-cake-warn: #E8A86B;
+  --color-cake-line: #EDE6DE;
+  --color-cake-cream: #FFFEFB;
+
+  /* Border radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Font */
+  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-size: 16px;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #FFFEFB;
+  --foreground: #1F1A17;
+  --card: #FFFFFF;
+  --card-foreground: #1F1A17;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F1A17;
+  --primary: #C8534A;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F5EDE4;
+  --secondary-foreground: #1F1A17;
+  --muted: #F2EBE4;
+  --muted-foreground: #6B6560;
+  --accent: #E8B4B8;
+  --accent-foreground: #1F1A17;
+  --destructive: #C75D5D;
+  --destructive-foreground: #FFFFFF;
+  --border: #EDE6DE;
+  --input: transparent;
+  --input-background: #F5EDE4;
+  --ring: #D4A574;
+  --radius: 0.75rem;
+  --sidebar: #1F1A17;
+  --sidebar-foreground: #FFFEFB;
+  --sidebar-primary: #C8534A;
+  --sidebar-primary-foreground: #FFFEFB;
+  --sidebar-accent: #2E2722;
+  --sidebar-accent-foreground: #F5EDE4;
+  --sidebar-border: #2E2722;
+  --sidebar-ring: #D4A574;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* Touch targets */
+button,
+a,
+[role="button"] {
+  min-height: 44px;
+}
+
+/* Scrollbar hide utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
