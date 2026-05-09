@@ -15,9 +15,12 @@ export async function POST(request: Request) {
 
     const supabase = await createServiceClient();
 
-    // auth.users에서 직접 bcrypt 비교로 검증
-    const { data: rows, error } = await supabase
-      .rpc("verify_admin_password" as never, { p_email: email, p_password: password });
+    // auth.users에서 직접 bcrypt 비교로 검증 (verify_admin_password SQL 함수)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: rows, error } = await (supabase as any).rpc("verify_admin_password", {
+      p_email: email,
+      p_password: password,
+    });
 
     if (error) {
       console.error("[admin/auth/login] rpc error:", error);
@@ -27,7 +30,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = Array.isArray(rows) ? rows[0] : null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const user = Array.isArray(rows) ? (rows as any[])[0] : null;
     if (!user?.id) {
       return NextResponse.json(
         { error: "이메일 또는 비밀번호가 올바르지 않습니다." },
@@ -36,8 +40,8 @@ export async function POST(request: Request) {
     }
 
     const token = await createAdminSession({
-      userId: user.id,
-      email: user.email,
+      userId: user.id as string,
+      email: user.email as string,
     });
 
     await setAdminCookie(token);
