@@ -22,13 +22,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "필수 정보가 누락되었습니다." }, { status: 400 });
     }
 
+    // 전화번호 정규화: 숫자만 추출 후 010-XXXX-XXXX 형식
+    const phoneDigits = String(customer_phone).replace(/[^0-9]/g, "");
+    const normalizedPhone = phoneDigits.length === 11
+      ? `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 7)}-${phoneDigits.slice(7)}`
+      : customer_phone;
+
     const supabase = await createServiceClient();
 
     // 고객 upsert (전화번호 기준)
     const { data: existing } = await supabase
       .from("customers")
       .select("id")
-      .eq("phone", customer_phone)
+      .eq("phone", normalizedPhone)
       .maybeSingle();
 
     let customerId: string;
@@ -42,7 +48,7 @@ export async function POST(request: Request) {
     } else {
       const { data: newCustomer, error: customerErr } = await supabase
         .from("customers")
-        .insert({ name: customer_name, phone: customer_phone })
+        .insert({ name: customer_name, phone: normalizedPhone })
         .select("id")
         .single();
       if (customerErr || !newCustomer) throw customerErr;
@@ -127,10 +133,16 @@ export async function GET(request: Request) {
   if (orderNumber) {
     query = query.eq("order_number", orderNumber);
   } else if (phone) {
+    // 전화번호 정규화 후 조회
+    const digits = String(phone).replace(/[^0-9]/g, "");
+    const normalizedPhone = digits.length === 11
+      ? `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+      : phone;
+
     const { data: customer } = await supabase
       .from("customers")
       .select("id")
-      .eq("phone", phone)
+      .eq("phone", normalizedPhone)
       .maybeSingle();
 
     if (!customer) return NextResponse.json({ orders: [] });

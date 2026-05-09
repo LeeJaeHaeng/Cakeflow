@@ -219,7 +219,7 @@ function PageContent() {
       formData.append("file", blob, "simulator-preview.png");
       formData.append("bucket", "simulator-previews");
 
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      const uploadRes = await fetch("/api/simulator/upload", { method: "POST", body: formData });
       const { url: previewUrl } = await uploadRes.json();
 
       // 세션 저장

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,30 +29,41 @@ function StepCustomer({ onNext }: StepProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
   const [verified, setVerified] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [otpCode, setOtpCode] = useState<string | null>(null); // mock mode
+  const [mockCode, setMockCode] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState("");
 
   const sendOtp = async () => {
-    if (!phone || phone.length < 10) return setError("올바른 전화번호를 입력해주세요.");
+    const digits = phone.replace(/[^0-9]/g, "");
+    if (digits.length !== 11 || !digits.startsWith("010")) {
+      return setError("010으로 시작하는 11자리 번호를 입력해주세요.");
+    }
     setError("");
     setSending(true);
     try {
       const res = await fetch("/api/auth/phone/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone: digits }),
       });
       const data = await res.json();
-      if (!res.ok) return setError(data.error ?? "발송 실패");
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "발송 실패");
+        return;
+      }
       setOtpSent(true);
-      if (data.code) setOtpCode(data.code); // SMS_MOCK_MODE
+      setRequestId(data.request_id);
+      if (data._mock_code) setMockCode(data._mock_code);
       setCooldown(60);
-      const t = setInterval(() => setCooldown((c) => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
+      const t = setInterval(() => setCooldown((c) => {
+        if (c <= 1) { clearInterval(t); return 0; }
+        return c - 1;
+      }), 1000);
     } catch {
       setError("네트워크 오류가 발생했습니다.");
     } finally {
@@ -60,20 +71,26 @@ function StepCustomer({ onNext }: StepProps) {
     }
   };
 
-  const verifyOtp = async () => {
+  const verifyOtpCode = async () => {
     if (!otp || otp.length !== 6) return setError("6자리 인증번호를 입력해주세요.");
+    if (!requestId) return setError("인증 요청 정보가 없습니다. 다시 발송해주세요.");
     setError("");
     setVerifying(true);
     try {
       const res = await fetch("/api/auth/phone/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: otp }),
+        body: JSON.stringify({ request_id: requestId, code: otp }),
       });
       const data = await res.json();
-      if (!res.ok) return setError(data.error ?? "인증 실패");
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "인증 실패");
+        return;
+      }
       setVerified(true);
-      sessionStorage.setItem("order_customer", JSON.stringify({ name, phone, token: data.token }));
+      const digits = phone.replace(/[^0-9]/g, "");
+      const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+      sessionStorage.setItem("order_customer", JSON.stringify({ name, phone: formatted, token: data.token }));
     } catch {
       setError("인증에 실패했습니다.");
     } finally {
@@ -125,10 +142,10 @@ function StepCustomer({ onNext }: StepProps) {
 
       {otpSent && (
         <div>
-          {otpCode && (
+          {mockCode && (
             <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl mb-2 text-xs text-amber-700">
               <ShieldCheck size={14} />
-              개발 모드 — 인증번호: <strong>{otpCode}</strong>
+              개발 모드 — 인증번호: <strong>{mockCode}</strong>
             </div>
           )}
           <label className="block text-sm font-medium mb-1.5">인증번호</label>
@@ -142,7 +159,7 @@ function StepCustomer({ onNext }: StepProps) {
               className="flex-1 h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 [appearance:textfield]"
             />
             <button
-              onClick={verifyOtp}
+              onClick={verifyOtpCode}
               disabled={verifying || verified}
               className="h-12 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium flex-shrink-0 disabled:opacity-50"
               style={{ minHeight: "unset" }}
@@ -502,6 +519,24 @@ function PageContent() {
   const simulatorSessionId = searchParams.get("simulatorSessionId") ?? undefined;
 
   const [step, setStep] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
+  const [designTitle, setDesignTitle] = useState<string | undefined>(undefined);
+
+  // 시뮬레이터 세션 미리보기 & 디자인 제목 로드
+  useEffect(() => {
+    if (simulatorSessionId) {
+      fetch(`/api/simulator/sessions?id=${simulatorSessionId}`)
+        .then((r) => r.json())
+        .then((d) => { if (d.preview_url) setPreviewUrl(d.preview_url); })
+        .catch(() => {});
+    }
+    if (designId) {
+      fetch(`/api/designs/${designId}`)
+        .then((r) => r.json())
+        .then((d) => { if (d.title) setDesignTitle(d.title); })
+        .catch(() => {});
+    }
+  }, [simulatorSessionId, designId]);
 
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
   const back = () => { if (step === 0) router.back(); else setStep((s) => s - 1); };
@@ -564,7 +599,8 @@ function PageContent() {
               <StepDesignConfirm
                 onNext={next}
                 onBack={back}
-                designTitle={designId ? "선택된 디자인" : undefined}
+                previewUrl={previewUrl}
+                designTitle={designTitle ?? (designId ? "선택된 디자인" : undefined)}
               />
             )}
             {step === 3 && <StepRequests onNext={next} onBack={back} />}
