@@ -15,23 +15,29 @@ export async function POST(request: Request) {
 
     const supabase = await createServiceClient();
 
-    // Supabase Auth로 이메일/비밀번호 검증
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // auth.users에서 직접 bcrypt 비교로 검증
+    const { data: rows, error } = await supabase
+      .rpc("verify_admin_password" as never, { p_email: email, p_password: password });
 
-    if (error || !data.user) {
+    if (error) {
+      console.error("[admin/auth/login] rpc error:", error);
       return NextResponse.json(
         { error: "이메일 또는 비밀번호가 올바르지 않습니다." },
         { status: 401 }
       );
     }
 
-    // 자체 JWT 세션 발급
+    const user = Array.isArray(rows) ? rows[0] : null;
+    if (!user?.id) {
+      return NextResponse.json(
+        { error: "이메일 또는 비밀번호가 올바르지 않습니다." },
+        { status: 401 }
+      );
+    }
+
     const token = await createAdminSession({
-      userId: data.user.id,
-      email: data.user.email!,
+      userId: user.id,
+      email: user.email,
     });
 
     await setAdminCookie(token);
