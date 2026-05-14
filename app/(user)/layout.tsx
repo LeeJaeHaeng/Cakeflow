@@ -11,7 +11,7 @@ export default function UserLayout({
   return (
     <>
       <BrandHeader />
-      <main className="flex-1 pb-16 md:pb-0">{children}</main>
+      <main className="flex-1 pb-24 md:pb-0">{children}</main>
       <SocialFooter />
       <BottomNav />
       <ToastProvider />

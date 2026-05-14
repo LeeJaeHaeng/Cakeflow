@@ -5,17 +5,17 @@ import { cn } from "@/lib/utils/cn";
 import type { ButtonHTMLAttributes } from "react";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         primary:
-          "bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] active:bg-[var(--color-primary-dark)]",
+          "bg-primary text-white hover:bg-primary/90 active:bg-primary/90",
         secondary:
-          "border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10",
-        ghost: "text-[var(--color-fg)] hover:bg-[var(--color-line)]",
+          "border border-primary text-primary hover:bg-primary/10",
+        ghost: "text-foreground hover:bg-muted",
         danger:
-          "bg-[var(--color-error)] text-white hover:bg-[var(--color-error)]/90",
+          "bg-destructive text-white hover:bg-destructive/90",
       },
       size: {
         sm: "h-9 px-3 text-sm",

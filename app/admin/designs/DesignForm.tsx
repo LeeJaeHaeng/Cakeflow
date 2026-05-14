@@ -122,12 +122,12 @@ export function DesignForm({ design, onSaved, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center bg-black/40">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-[var(--radius-lg)] md:rounded-[var(--radius-lg)] bg-white p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-[var(--color-fg)]">
+          <h2 className="text-lg font-bold text-foreground">
             {isEdit ? "디자인 수정" : "새 디자인 등록"}
           </h2>
           <button
             onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-[var(--color-line)] text-[var(--color-muted)]"
+            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground"
           >
             ✕
           </button>
@@ -154,9 +154,9 @@ export function DesignForm({ design, onSaved, onClose }: Props) {
 
           {/* 대표 이미지 */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--color-fg)]">대표 이미지 *</label>
+            <label className="text-sm font-medium text-foreground">대표 이미지 *</label>
             {thumbnailUrl ? (
-              <div className="relative aspect-square w-32 rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-line)]">
+              <div className="relative aspect-square w-32 rounded-[var(--radius-md)] overflow-hidden border border-border">
                 <Image src={thumbnailUrl} alt="썸네일" fill sizes="128px" className="object-cover" />
                 <button
                   type="button"
@@ -167,21 +167,21 @@ export function DesignForm({ design, onSaved, onClose }: Props) {
                 </button>
               </div>
             ) : (
-              <label className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-[var(--radius-md)] border-2 border-dashed border-[var(--color-line)] hover:border-[var(--color-primary)] transition-colors">
+              <label className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-[var(--radius-md)] border-2 border-dashed border-border hover:border-primary transition-colors">
                 {uploading ? (
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" />
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 ) : (
                   <span className="text-2xl">📷</span>
                 )}
                 <input type="file" accept="image/*" className="sr-only" onChange={handleImageUpload} />
               </label>
             )}
-            {errors.thumbnail && <p className="text-xs text-[var(--color-error)]">{errors.thumbnail}</p>}
+            {errors.thumbnail && <p className="text-xs text-destructive">{errors.thumbnail}</p>}
           </div>
 
           {/* 카테고리 */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-[var(--color-fg)]">카테고리 (중복 선택)</label>
+            <label className="text-sm font-medium text-foreground">카테고리 (중복 선택)</label>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((cat) => (
                 <button
@@ -190,8 +190,8 @@ export function DesignForm({ design, onSaved, onClose }: Props) {
                   onClick={() => toggleCategory(cat.value)}
                   className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
                     categories.includes(cat.value)
-                      ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                      : "border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-primary)]"
+                      ? "bg-primary text-white border-primary"
+                      : "border-border text-muted-foreground hover:border-primary"
                   }`}
                 >
                   {cat.label}
@@ -209,12 +209,12 @@ export function DesignForm({ design, onSaved, onClose }: Props) {
           />
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--color-fg)]">설명</label>
+            <label className="text-sm font-medium text-foreground">설명</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] px-3.5 py-2.5 text-sm outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 resize-none"
+              className="w-full rounded-[var(--radius-sm)] border border-border px-3.5 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"
               placeholder="디자인 설명을 입력하세요."
             />
           </div>

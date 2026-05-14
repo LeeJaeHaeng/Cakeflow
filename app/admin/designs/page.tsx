@@ -22,8 +22,8 @@ export default async function AdminDesignsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-fg)]">디자인 관리</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-1">
+          <h1 className="text-2xl font-bold text-foreground">디자인 관리</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             총 {designs?.length ?? 0}개 디자인
           </p>
         </div>

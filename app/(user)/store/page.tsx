@@ -6,11 +6,11 @@ export const metadata: Metadata = {
 export default function StorePage() {
   return (
     <div className="px-4 py-6 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-[var(--color-fg)] mb-6">매장정보</h1>
+      <h1 className="mb-6 text-2xl font-bold text-foreground">매장정보</h1>
 
       <div className="space-y-4">
         {/* 지도 */}
-        <div className="aspect-video w-full rounded-[var(--radius-lg)] overflow-hidden bg-[var(--color-line)]">
+        <div className="aspect-video w-full overflow-hidden rounded-[var(--radius-lg)] bg-muted">
           <iframe
             src="https://map.kakao.com/link/map/앙금앤케이크,37.2883,127.0162"
             className="w-full h-full"
@@ -19,7 +19,7 @@ export default function StorePage() {
         </div>
 
         {/* 정보 카드 */}
-        <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] divide-y divide-[var(--color-line)]">
+        <div className="divide-y divide-border rounded-[var(--radius-lg)] border border-border">
           <InfoRow label="주소" value="경기 수원시 팔달구 정자천로14번길 40" />
           <InfoRow label="운영시간" value="확인 중 (사장님 문의)" />
           <InfoRow label="휴무일" value="확인 중 (사장님 문의)" />
@@ -40,13 +40,13 @@ export default function StorePage() {
             href="https://instagram.com/anggeumandcake"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-12 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-line)] font-medium text-[var(--color-fg)]"
+            className="flex h-12 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-border font-medium text-foreground"
           >
             📷 인스타그램 팔로우
           </a>
         </div>
 
-        <p className="text-xs text-center text-[var(--color-muted)]">
+        <p className="text-center text-xs text-muted-foreground">
           운영시간 외 문의는 인스타 DM 또는 카카오톡으로 남겨주세요.
         </p>
       </div>
@@ -57,8 +57,8 @@ export default function StorePage() {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3 px-4 py-3">
-      <span className="w-16 shrink-0 text-xs font-medium text-[var(--color-muted)]">{label}</span>
-      <span className="text-sm text-[var(--color-fg)]">{value}</span>
+      <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground">{value}</span>
     </div>
   );
 }

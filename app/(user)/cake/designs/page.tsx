@@ -163,7 +163,7 @@ export default function DesignsPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="sticky top-14 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
+      <div className="sticky top-16 z-20 border-b border-border bg-background/95 backdrop-blur-sm">
         {/* Search */}
         <div className="px-4 pt-3 pb-2">
           <div className="relative">

@@ -30,8 +30,8 @@ toast.error = (msg: string) => toast(msg, "error");
 
 const variantStyles: Record<ToastVariant, string> = {
   success: "bg-[var(--color-success)] text-white",
-  error: "bg-[var(--color-error)] text-white",
-  info: "bg-[var(--color-fg)] text-white",
+  error: "bg-destructive text-white",
+  info: "bg-foreground text-white",
 };
 
 export function ToastProvider() {

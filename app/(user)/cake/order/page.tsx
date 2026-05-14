@@ -818,7 +818,7 @@ function PageContent() {
   return (
     <div className="min-h-screen bg-background pb-8">
       {/* Header */}
-      <div className="sticky top-14 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
+      <div className="sticky top-16 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="flex items-center gap-3 px-4 py-3">
           <button onClick={back} style={{ minHeight: "unset" }}>
             <ChevronLeft size={20} className="text-muted-foreground" />

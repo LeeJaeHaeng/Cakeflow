@@ -92,8 +92,8 @@ export function DesignList({ initialDesigns }: Props) {
       {designs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <span className="text-5xl mb-4">🎂</span>
-          <p className="font-medium text-[var(--color-fg)]">등록된 디자인이 없습니다</p>
-          <p className="text-sm text-[var(--color-muted)] mt-1">첫 번째 디자인을 등록해보세요!</p>
+          <p className="font-medium text-foreground">등록된 디자인이 없습니다</p>
+          <p className="text-sm text-muted-foreground mt-1">첫 번째 디자인을 등록해보세요!</p>
           <Button onClick={openNew} className="mt-4">디자인 등록하기</Button>
         </div>
       ) : (
@@ -101,9 +101,9 @@ export function DesignList({ initialDesigns }: Props) {
           {designs.map((design) => (
             <div
               key={design.id}
-              className="group relative rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-white overflow-hidden"
+              className="group relative rounded-[var(--radius-lg)] border border-border bg-white overflow-hidden"
             >
-              <div className="relative aspect-square bg-[var(--color-line)]">
+              <div className="relative aspect-square bg-muted">
                 {design.thumbnail_url ? (
                   <Image
                     src={design.thumbnail_url}
@@ -123,28 +123,28 @@ export function DesignList({ initialDesigns }: Props) {
               </div>
 
               <div className="p-3">
-                <p className="font-medium text-sm text-[var(--color-fg)] truncate">{design.title}</p>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                <p className="font-medium text-sm text-foreground truncate">{design.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   ₩{design.price_from.toLocaleString()}~
                 </p>
 
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={() => openEdit(design)}
-                    className="flex-1 text-xs py-1.5 rounded border border-[var(--color-line)] hover:bg-[var(--color-line)] transition-colors"
+                    className="flex-1 text-xs py-1.5 rounded border border-border hover:bg-muted transition-colors"
                   >
                     수정
                   </button>
                   <button
                     onClick={() => handleToggleStatus(design)}
-                    className="flex-1 text-xs py-1.5 rounded border border-[var(--color-line)] hover:bg-[var(--color-line)] transition-colors"
+                    className="flex-1 text-xs py-1.5 rounded border border-border hover:bg-muted transition-colors"
                   >
                     {design.display_status === "visible" ? "숨기기" : "진열"}
                   </button>
                   <button
                     onClick={() => handleDelete(design)}
                     disabled={deletingId === design.id}
-                    className="text-xs py-1.5 px-2 rounded border border-[var(--color-error)]/30 text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors disabled:opacity-50"
+                    className="text-xs py-1.5 px-2 rounded border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
                   >
                     삭제
                   </button>

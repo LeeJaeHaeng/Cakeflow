@@ -40,14 +40,14 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <span className="text-4xl">🎂</span>
-          <h1 className="mt-2 text-xl font-bold text-[var(--color-fg)]">
+          <h1 className="mt-2 text-xl font-bold text-foreground">
             앙금앤케이크 관리자
           </h1>
-          <p className="mt-1 text-sm text-[var(--color-muted)]">CakeFlow 관리 시스템</p>
+          <p className="mt-1 text-sm text-muted-foreground">CakeFlow 관리 시스템</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
           />
 
           {error && (
-            <p className="text-sm text-[var(--color-error)]">{error}</p>
+            <p className="text-sm text-destructive">{error}</p>
           )}
 
           <Button type="submit" className="w-full" loading={loading}>
