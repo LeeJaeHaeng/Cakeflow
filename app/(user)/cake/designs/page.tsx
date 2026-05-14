@@ -126,12 +126,23 @@ export default function DesignsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/designs")
-      .then((r) => r.json())
-      .then((d) => setDesigns(d.items ?? []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    async function loadDesigns() {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/designs");
+        const data = await res.json();
+        if (!cancelled) setDesigns(data.items ?? []);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadDesigns();
+    return () => { cancelled = true; };
   }, []);
 
   const filtered = designs.filter((d) => {

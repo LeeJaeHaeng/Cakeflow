@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
@@ -156,7 +157,7 @@ export function DesignForm({ design, onSaved, onClose }: Props) {
             <label className="text-sm font-medium text-[var(--color-fg)]">대표 이미지 *</label>
             {thumbnailUrl ? (
               <div className="relative aspect-square w-32 rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-line)]">
-                <img src={thumbnailUrl} alt="썸네일" className="object-cover w-full h-full" />
+                <Image src={thumbnailUrl} alt="썸네일" fill sizes="128px" className="object-cover" />
                 <button
                   type="button"
                   onClick={() => setThumbnailUrl("")}

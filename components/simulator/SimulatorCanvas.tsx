@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { Stage, Layer, Rect, Text, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useSimulatorStore, type SimObject } from "@/lib/simulator/store";
@@ -14,16 +14,19 @@ interface ObjectNodeProps {
   onChange: (updates: Partial<SimObject>) => void;
 }
 
-function ImageObjectNode({ obj, isSelected, onSelect, onChange }: ObjectNodeProps) {
+function ImageObjectNode({ obj, onSelect, onChange }: ObjectNodeProps) {
   const nodeRef = useRef<Konva.Image>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
 
   useEffect(() => {
-    if (!obj.src) return;
+    if (!obj.src) {
+      queueMicrotask(() => setImage(null));
+      return;
+    }
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      imageRef.current = img;
+      setImage(img);
       nodeRef.current?.getLayer()?.batchDraw();
     };
     img.src = obj.src;
@@ -53,7 +56,7 @@ function ImageObjectNode({ obj, isSelected, onSelect, onChange }: ObjectNodeProp
     <KonvaImage
       ref={nodeRef}
       id={obj.id}
-      image={imageRef.current ?? undefined}
+      image={image ?? undefined}
       x={obj.x}
       y={obj.y}
       width={obj.width}
@@ -70,7 +73,7 @@ function ImageObjectNode({ obj, isSelected, onSelect, onChange }: ObjectNodeProp
   );
 }
 
-function TextObjectNode({ obj, isSelected, onSelect, onChange }: ObjectNodeProps) {
+function TextObjectNode({ obj, onSelect, onChange }: ObjectNodeProps) {
   const nodeRef = useRef<Konva.Text>(null);
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -118,7 +121,7 @@ function TextObjectNode({ obj, isSelected, onSelect, onChange }: ObjectNodeProps
   );
 }
 
-function StickerObjectNode({ obj, isSelected, onSelect, onChange }: ObjectNodeProps) {
+function StickerObjectNode({ obj, onSelect, onChange }: ObjectNodeProps) {
   const nodeRef = useRef<Konva.Text>(null);
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {

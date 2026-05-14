@@ -12,6 +12,7 @@ export async function POST(request: Request) {
       pickup_time,
       customer_message,
       allergy,
+      cake_details,
       design_id,
       simulator_session_id,
       order_type = "cake",
@@ -21,6 +22,33 @@ export async function POST(request: Request) {
     if (!customer_name || !customer_phone || !pickup_date) {
       return NextResponse.json({ error: "필수 정보가 누락되었습니다." }, { status: 400 });
     }
+
+    const formatCakeDetails = (details: Record<string, unknown> | null | undefined) => {
+      if (!details || typeof details !== "object") return "";
+
+      const rows: Array<[string, unknown]> = [
+        ["주문서", details.form_variant === "rice" ? "앙금플라워 떡케이크" : "디자인케이크"],
+        ["사이즈", details.size],
+        ["빵맛", details.sheet_flavor],
+        ["떡 종류", details.rice_base],
+        ["2단 상담", details.two_tier ? "희망" : ""],
+        ["필링", Array.isArray(details.filling) ? details.filling.join(", ") : ""],
+        ["디자인 스타일", details.design_style],
+        ["색감", details.desired_color],
+        ["문구", details.phrase],
+        ["레터링 추가", details.lettering ? "희망" : ""],
+        ["초 추가", details.candle ? "희망" : ""],
+        ["숫자 떡케이크", details.number_rice_cake ? "상담 희망" : ""],
+        ["참고사진/설명", details.reference_note],
+        ["알레르기", details.allergy],
+        ["기타 요청", details.extra_request],
+      ];
+
+      return rows
+        .filter(([, value]) => Boolean(value))
+        .map(([label, value]) => `${label}: ${value}`)
+        .join("\n");
+    };
 
     // 전화번호 정규화: 숫자만 추출 후 010-XXXX-XXXX 형식
     const phoneDigits = String(customer_phone).replace(/[^0-9]/g, "");
@@ -58,6 +86,12 @@ export async function POST(request: Request) {
     // 주문번호 생성 (CF + yyyyMMdd + 4자리 랜덤)
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const orderNumber = `CF${today}${nanoid(4).toUpperCase()}`;
+    const formattedDetails = formatCakeDetails(cake_details);
+    const combinedMessage = [
+      formattedDetails,
+      !formattedDetails && customer_message ? customer_message : "",
+      !formattedDetails && allergy ? `알레르기: ${allergy}` : "",
+    ].filter(Boolean).join("\n");
 
     // 주문 생성
     const { data: order, error: orderErr } = await supabase
@@ -69,7 +103,7 @@ export async function POST(request: Request) {
         delivery_method,
         pickup_date,
         pickup_time: pickup_time ?? null,
-        customer_message: [customer_message, allergy ? `알레르기: ${allergy}` : ""].filter(Boolean).join("\n") || null,
+        customer_message: combinedMessage || null,
         simulator_session_id: simulator_session_id ?? null,
         total_price: 0,
         deposit_amount: 0,

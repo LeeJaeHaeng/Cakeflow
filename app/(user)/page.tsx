@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -163,7 +164,13 @@ export default function CustomerHomePage() {
               className="flex-shrink-0 w-52 bg-card rounded-2xl border border-border overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
             >
               <div className="relative">
-                <img src={design.img} alt={design.title} className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />
+                <Image
+                  src={design.img}
+                  alt={design.title}
+                  width={208}
+                  height={208}
+                  className="h-52 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
                 <button
                   style={{ minHeight: "unset" }}
                   onClick={() => toggleLike(design.id)}
@@ -250,7 +257,13 @@ export default function CustomerHomePage() {
               className={`bg-card rounded-2xl border border-border overflow-hidden cursor-pointer hover:shadow-md transition-shadow ${d.stock === 0 ? "opacity-60" : ""}`}
             >
               <div className="relative">
-                <img src={d.img} alt={d.title} className="w-full h-36 object-cover" />
+                <Image
+                  src={d.img}
+                  alt={d.title}
+                  width={300}
+                  height={144}
+                  className="h-36 w-full object-cover"
+                />
                 {d.stock === 0 && (
                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                     <span className="bg-black/60 text-white text-xs px-3 py-1 rounded-full font-medium">품절</span>

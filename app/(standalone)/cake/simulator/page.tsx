@@ -81,7 +81,7 @@ function PageContent() {
   const {
     objects, selectedId, bgColor, historyIdx, history,
     addObject, removeObject, setSelected, setBgColor,
-    bringForward, sendBackward, undo, redo, canUndo, canRedo,
+    bringForward, sendBackward, undo, redo,
   } = useSimulatorStore();
 
   const [stickerOpen, setStickerOpen] = useState(false);
@@ -90,6 +90,27 @@ function PageContent() {
   const [saving, setSaving] = useState(false);
   const [exportDone, setExportDone] = useState(false);
   const [removingBg, setRemovingBg] = useState(false);
+
+  const addImageToCanvas = useCallback((src: string) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const scale = Math.min(CANVAS_SIZE * 0.6 / img.width, CANVAS_SIZE * 0.6 / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      addObject({
+        type: "image",
+        src,
+        x: (CANVAS_SIZE - w) / 2,
+        y: (CANVAS_SIZE - h) / 2,
+        width: w,
+        height: h,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+      });
+    };
+    img.src = src;
+  }, [addObject]);
 
   // 이미지 업로드 + 선택적 배경 제거
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,28 +164,7 @@ function PageContent() {
     } else {
       addImageToCanvas(src);
     }
-  }, []);
-
-  const addImageToCanvas = (src: string) => {
-    const img = new window.Image();
-    img.onload = () => {
-      const scale = Math.min(CANVAS_SIZE * 0.6 / img.width, CANVAS_SIZE * 0.6 / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      addObject({
-        type: "image",
-        src,
-        x: (CANVAS_SIZE - w) / 2,
-        y: (CANVAS_SIZE - h) / 2,
-        width: w,
-        height: h,
-        rotation: 0,
-        scaleX: 1,
-        scaleY: 1,
-      });
-    };
-    img.src = src;
-  };
+  }, [addImageToCanvas]);
 
   const handleAddSticker = (emoji: string) => {
     addObject({

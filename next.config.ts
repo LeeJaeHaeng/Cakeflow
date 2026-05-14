@@ -8,7 +8,6 @@ const nextConfig: NextConfig = {
         hostname: "bwphdfyaxeckrpmbxtew.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
-      // 개발용 더미 이미지
       {
         protocol: "https",
         hostname: "picsum.photos",
@@ -23,7 +22,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // @imgly/background-removal WASM 번들 처리
+  // Turbopack 설정 (Next.js 16 기본)
+  turbopack: {},
+  // @imgly/background-removal WASM 번들 처리 (webpack fallback 병행)
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,

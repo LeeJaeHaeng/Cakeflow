@@ -16,6 +16,72 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+interface Review {
+  id: string;
+  rating: number;
+  content: string | null;
+  image_url: string | null;
+  created_at: string;
+  customers: { name: string } | null;
+}
+
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1,2,3,4,5].map((s) => (
+        <Star key={s} size={12} className={s <= rating ? "fill-amber-400 text-amber-400" : "text-gray-200"} />
+      ))}
+    </div>
+  );
+}
+
+function ReviewsSection({ designId }: { designId: string }) {
+  const [reviews, setReviews] = useState<Review[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/reviews?design_id=${designId}`)
+      .then((r) => r.json())
+      .then((d) => setReviews(d.reviews ?? []));
+  }, [designId]);
+
+  if (reviews.length === 0) return null;
+
+  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center gap-2 mb-3">
+        <p className="text-sm font-medium">고객 리뷰</p>
+        <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">
+          <Star size={11} className="fill-amber-400 text-amber-400" />
+          {avg.toFixed(1)} ({reviews.length}건)
+        </span>
+      </div>
+      <div className="space-y-3">
+        {reviews.slice(0, 5).map((r) => (
+          <div key={r.id} className="bg-muted/40 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <StarRating rating={r.rating} />
+              <span className="text-xs text-muted-foreground">
+                {r.customers?.name ? `${r.customers.name[0]}${"*".repeat(r.customers.name.length - 1)}` : "고객"}
+              </span>
+              <span className="text-xs text-muted-foreground ml-auto">
+                {new Date(r.created_at).toLocaleDateString("ko-KR")}
+              </span>
+            </div>
+            {r.content && <p className="text-sm text-foreground leading-relaxed">{r.content}</p>}
+            {r.image_url && (
+              <div className="mt-2 relative w-24 h-24 rounded-xl overflow-hidden">
+                <Image src={r.image_url} alt="리뷰 이미지" fill className="object-cover" sizes="96px" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface DesignImage {
   id: string;
   url: string;
@@ -283,6 +349,9 @@ export default function DesignDetailPage() {
             </div>
           ))}
         </div>
+
+        {/* 리뷰 */}
+        <ReviewsSection designId={design.id} />
       </div>
 
       {/* Fixed bottom CTA */}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
@@ -21,16 +21,16 @@ import {
   ExternalLink,
 } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/admin", icon: LayoutDashboard, label: "대시보드", badge: null, exact: true },
-  { href: "/admin/orders", icon: ShoppingBag, label: "주문관리", badge: 3, exact: false },
-  { href: "/admin/calendar", icon: Calendar, label: "일정 캘린더", badge: null, exact: false },
-  { href: "/admin/customers", icon: Users, label: "고객관리", badge: null, exact: false },
-  { href: "/admin/designs", icon: Cake, label: "디자인 관리", badge: null, exact: false },
-  { href: "/admin/products", icon: Package, label: "디저트 상품", badge: null, exact: false },
-  { href: "/admin/sns", icon: Share2, label: "SNS 자동화", badge: null, exact: false },
-  { href: "/admin/analytics", icon: BarChart3, label: "통계 분석", badge: null, exact: false },
-  { href: "/admin/settings", icon: Settings, label: "설정", badge: null, exact: false },
+const BASE_NAV_ITEMS = [
+  { href: "/admin", icon: LayoutDashboard, label: "대시보드", exact: true },
+  { href: "/admin/orders", icon: ShoppingBag, label: "주문관리", exact: false },
+  { href: "/admin/calendar", icon: Calendar, label: "일정 캘린더", exact: false },
+  { href: "/admin/customers", icon: Users, label: "고객관리", exact: false },
+  { href: "/admin/designs", icon: Cake, label: "디자인 관리", exact: false },
+  { href: "/admin/products", icon: Package, label: "디저트 상품", exact: false },
+  { href: "/admin/sns", icon: Share2, label: "SNS 자동화", exact: false },
+  { href: "/admin/analytics", icon: BarChart3, label: "통계 분석", exact: false },
+  { href: "/admin/settings", icon: Settings, label: "설정", exact: false },
 ];
 
 function CakeFlowLogo({ collapsed = false }: { collapsed?: boolean }) {
@@ -62,7 +62,21 @@ function CakeFlowLogo({ collapsed = false }: { collapsed?: boolean }) {
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (pathname === "/admin/login") return;
+    fetch("/api/admin/stats")
+      .then((r) => r.json())
+      .then((d) => setPendingCount(d.newOrderCount ?? 0))
+      .catch(() => {});
+  }, [pathname]);
+
+  const navItems = BASE_NAV_ITEMS.map((item) => ({
+    ...item,
+    badge: item.href === "/admin/orders" && pendingCount ? pendingCount : null,
+  }));
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
@@ -116,7 +130,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
             return (
               <Link
