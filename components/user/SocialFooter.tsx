@@ -1,8 +1,10 @@
+import { BrandLogo } from "@/components/brand/BrandLogo";
+
 export function SocialFooter() {
   return (
     <footer className="mb-24 border-t border-border bg-background px-4 py-6 md:mb-0">
       <div className="flex flex-col items-center gap-4 text-center">
-        <p className="text-sm font-semibold text-foreground">앙금앤케이크</p>
+        <BrandLogo className="h-12 max-w-[196px]" />
         <p className="text-xs leading-relaxed text-muted-foreground">
           경기 수원시 팔달구 정자천로14번길 40
         </p>

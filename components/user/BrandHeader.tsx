@@ -1,14 +1,15 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export function BrandHeader() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center border-b border-border bg-background/95 px-4 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/90">
       <Link
         href="/"
-        className="flex min-w-0 items-center gap-2 font-semibold text-foreground"
+        className="flex min-w-0 items-center"
+        aria-label="앙금앤케이크 홈"
       >
-        <span className="text-xl leading-none text-primary">🎂</span>
-        <span className="truncate text-lg tracking-tight">앙금앤케이크</span>
+        <BrandLogo className="h-11 max-w-[190px]" priority />
       </Link>
 
       <nav className="ml-auto flex shrink-0 items-center gap-1.5">

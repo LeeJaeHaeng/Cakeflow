@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   description:
     "수원 앙금앤케이크에서 떡케이크와 수제디저트를 주문하세요. 케이크 시뮬레이터로 원하는 디자인을 직접 만들어보세요.",
   keywords: ["떡케이크", "앙금플라워", "수원케이크", "수제디저트", "케이크주문"],
+  icons: {
+    icon: "/brand/anggeum-cake-logo.svg",
+    apple: "/brand/anggeum-cake-logo.svg",
+  },
   openGraph: {
     siteName: "앙금앤케이크",
     locale: "ko_KR",

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -35,26 +36,8 @@ const BASE_NAV_ITEMS = [
 
 function CakeFlowLogo({ collapsed = false }: { collapsed?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="w-9 h-9 flex-shrink-0">
-        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="4" y="25" width="28" height="6" rx="3" fill="#C8534A" />
-          <rect x="7" y="17" width="22" height="8" rx="2" fill="#D4A574" />
-          <rect x="10" y="10" width="16" height="7" rx="2" fill="#E8B4B8" />
-          <ellipse cx="14" cy="10" rx="2.5" ry="2" fill="white" opacity="0.9" />
-          <ellipse cx="18" cy="9" rx="2.5" ry="2.2" fill="white" opacity="0.9" />
-          <ellipse cx="22" cy="10" rx="2.5" ry="2" fill="white" opacity="0.9" />
-          <rect x="17" y="5" width="2" height="5" rx="1" fill="#D4A574" />
-          <ellipse cx="18" cy="5" rx="1.5" ry="1.5" fill="#E8A86B" />
-          <ellipse cx="18" cy="4.5" rx="0.8" ry="1.2" fill="#FFDD99" />
-        </svg>
-      </div>
-      {!collapsed && (
-        <div className="flex flex-col leading-none">
-          <span className="text-sm font-bold text-white tracking-tight">앙금앤케이크</span>
-          <span className="text-xs text-white/50 tracking-widest mt-0.5">CakeFlow</span>
-        </div>
-      )}
+    <div className="flex items-center">
+      <BrandLogo className={collapsed ? "h-10 w-10" : "h-12 max-w-[190px]"} />
     </div>
   );
 }

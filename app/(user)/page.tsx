@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import {
   ArrowRight,
   Star,
@@ -335,7 +336,7 @@ export default function CustomerHomePage() {
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-4 left-4">
-              <p className="text-white font-bold text-lg">앙금앤케이크</p>
+              <BrandLogo className="h-12 max-w-[210px] drop-shadow-md" />
               <p className="text-white/70 text-xs">경기 수원시 팔달구</p>
             </div>
           </div>

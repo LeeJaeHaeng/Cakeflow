@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -43,10 +44,8 @@ export default function AdminLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <span className="text-4xl">🎂</span>
-          <h1 className="mt-2 text-xl font-bold text-foreground">
-            앙금앤케이크 관리자
-          </h1>
+          <BrandLogo className="mx-auto h-16 max-w-[220px]" priority />
+          <h1 className="mt-3 text-xl font-bold text-foreground">관리자</h1>
           <p className="mt-1 text-sm text-muted-foreground">CakeFlow 관리 시스템</p>
         </div>
 
