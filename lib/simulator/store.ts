@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
+import type { ProductKey } from "@/lib/orders/pricing";
 
 export type SimObjectType = "image" | "sticker" | "text";
 export type SimulatorCakeType = "design" | "rice";
@@ -39,6 +40,7 @@ export interface SimulatorSnapshot {
   cakeType: SimulatorCakeType;
   canvasShape: SimulatorCanvasShape;
   cakeSize: string;
+  productKey: ProductKey | null;
   referenceImageMode: "design-reference" | "print-image";
   layoutPreset: RiceLayoutPreset | null;
   lettering: Array<{
@@ -58,6 +60,7 @@ interface SimulatorStore {
   cakeType: SimulatorCakeType;
   canvasShape: SimulatorCanvasShape;
   cakeSize: string;
+  productKey: ProductKey | null;
   referenceImageMode: "design-reference" | "print-image";
   layoutPreset: RiceLayoutPreset | null;
   designId: string | null;
@@ -71,6 +74,7 @@ interface SimulatorStore {
   setSelected: (id: string | null) => void;
   setBgColor: (color: string) => void;
   setCakeType: (cakeType: SimulatorCakeType) => void;
+  setProductKey: (productKey: ProductKey | null) => void;
   setCakeSize: (cakeSize: string) => void;
   setLayoutPreset: (preset: RiceLayoutPreset | null) => void;
   setDesignId: (id: string | null) => void;
@@ -90,6 +94,7 @@ function buildSnapshot(state: {
   cakeType: SimulatorCakeType;
   canvasShape: SimulatorCanvasShape;
   cakeSize: string;
+  productKey: ProductKey | null;
   referenceImageMode: "design-reference" | "print-image";
   layoutPreset: RiceLayoutPreset | null;
 }): SimulatorSnapshot {
@@ -100,6 +105,7 @@ function buildSnapshot(state: {
     cakeType: state.cakeType,
     canvasShape: state.canvasShape,
     cakeSize: state.cakeSize,
+    productKey: state.productKey,
     referenceImageMode: state.referenceImageMode,
     layoutPreset: state.layoutPreset,
     lettering: objects
@@ -122,6 +128,7 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
   cakeType: "design",
   canvasShape: "round",
   cakeSize: "1호",
+  productKey: null,
   referenceImageMode: "print-image",
   layoutPreset: null,
   designId: null,
@@ -181,6 +188,8 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
       };
     });
   },
+
+  setProductKey: (productKey) => set({ productKey }),
 
   setCakeSize: (cakeSize) => set({ cakeSize }),
 

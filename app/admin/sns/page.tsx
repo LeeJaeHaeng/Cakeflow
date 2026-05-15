@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Plus, Copy, Trash2, Hash, Loader2, CheckCircle2, X } from "lucide-react";
+import { Sparkles, Plus, Copy, Trash2, Hash, Loader2, CheckCircle2, X, Upload } from "lucide-react";
+import { toast } from "@/components/ui/Toast";
 
 interface SnsPost {
   id: string;
@@ -33,6 +34,29 @@ function NewPostModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
   const [imageUrl, setImageUrl] = useState("");
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const uploadImage = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "cake-designs");
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.url) {
+        setImageUrl(data.url);
+        toast.success("이미지를 업로드했습니다.");
+      } else {
+        toast.error(data?.detail ?? data?.error ?? "업로드에 실패했습니다.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "업로드에 실패했습니다.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const generate = async () => {
     setGenerating(true);
@@ -108,13 +132,42 @@ function NewPostModal({ onClose, onSave }: { onClose: () => void; onSave: () => 
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground font-medium block mb-1">이미지 URL (선택)</label>
-            <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full bg-muted rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-            />
+            <label className="text-xs text-muted-foreground font-medium block mb-1">이미지 업로드 (선택)</label>
+            <div className="flex items-center gap-3 rounded-xl bg-muted p-3">
+              {imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-background text-muted-foreground">
+                  <Hash size={20} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-card/80">
+                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  로컬 이미지 업로드
+                  <input
+                    type="file"
+                    accept="image/*,.heic"
+                    className="sr-only"
+                    onChange={(event) => {
+                      void uploadImage(event.target.files?.[0]);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                {imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl("")}
+                    className="ml-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    style={{ minHeight: "unset" }}
+                  >
+                    제거
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

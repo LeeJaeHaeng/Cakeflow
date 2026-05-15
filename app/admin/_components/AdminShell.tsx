@@ -11,6 +11,7 @@ import {
   Calendar,
   Users,
   Cake,
+  Sparkles,
   Package,
   Share2,
   BarChart3,
@@ -28,6 +29,7 @@ const BASE_NAV_ITEMS = [
   { href: "/admin/calendar", icon: Calendar, label: "일정 캘린더", exact: false },
   { href: "/admin/customers", icon: Users, label: "고객관리", exact: false },
   { href: "/admin/designs", icon: Cake, label: "디자인 관리", exact: false },
+  { href: "/admin/simulator", icon: Sparkles, label: "시뮬레이터", exact: false },
   { href: "/admin/products", icon: Package, label: "디저트 상품", exact: false },
   { href: "/admin/sns", icon: Share2, label: "SNS 자동화", exact: false },
   { href: "/admin/analytics", icon: BarChart3, label: "통계 분석", exact: false },
@@ -157,10 +159,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </Link>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold">박</span>
+                <span className="text-white text-xs font-bold">김</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">박서연 사장님</p>
+                <p className="text-sm text-white font-medium truncate">김은숙 사장님</p>
                 <p className="text-xs text-white/40 truncate">앙금앤케이크</p>
               </div>
             </div>
@@ -195,7 +197,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
             </button>
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <span className="text-white text-xs font-bold">박</span>
+              <span className="text-white text-xs font-bold">김</span>
             </div>
           </div>
         </header>

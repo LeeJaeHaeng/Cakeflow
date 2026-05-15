@@ -32,6 +32,15 @@ import {
 } from "@/lib/simulator/store";
 import { StickerPicker } from "@/components/simulator/StickerPicker";
 import { TextEditor, type LetteringEditorValue } from "@/components/simulator/TextEditor";
+import {
+  PRODUCT_OPTIONS,
+  DEFAULT_SIMULATOR_EXAMPLES,
+  formatWon,
+  getProduct,
+  getProductVariant,
+  type ProductKey,
+  type SimulatorExampleMap,
+} from "@/lib/orders/pricing";
 
 const SimulatorCanvas = dynamic(
   () => import("@/components/simulator/SimulatorCanvas").then((m) => ({ default: m.SimulatorCanvas })),
@@ -96,7 +105,7 @@ function ToolButton({
       onClick={onClick}
       disabled={disabled}
       className={`relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl text-xs transition-all
-        ${active ? "bg-primary/15 text-primary" : "text-white/60 hover:bg-white/10 hover:text-white"}
+        ${active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}
         ${disabled ? "opacity-30 pointer-events-none" : ""}
       `}
       style={{ minHeight: "unset" }}
@@ -104,56 +113,159 @@ function ToolButton({
       <Icon size={20} />
       <span className="whitespace-nowrap">{label}</span>
       {badge && (
-        <span className="absolute -top-1 -right-1 text-[9px] bg-primary text-white rounded-full px-1">{badge}</span>
+        <span className="absolute -top-1 -right-1 text-[9px] bg-primary text-primary-foreground rounded-full px-1">{badge}</span>
       )}
     </button>
   );
 }
 
-function ModeChooser({ onChoose }: { onChoose: (type: SimulatorCakeType) => void }) {
+function isProductKey(value: string | null): value is ProductKey {
+  return PRODUCT_OPTIONS.some((product) => product.key === value);
+}
+
+const SIMULATOR_PRODUCTS = PRODUCT_OPTIONS.filter((product) => product.category !== "dessert");
+
+function ProductChooser({
+  examples,
+  onChoose,
+}: {
+  examples: SimulatorExampleMap;
+  onChoose: (productKey: ProductKey) => void;
+}) {
+  const groups = [
+    {
+      title: "앙금떡케이크",
+      description: "설기, 앙금꽃, 나이프플라워, 레터링 중심의 주문시안",
+      icon: Flower2,
+      items: SIMULATOR_PRODUCTS.filter((product) => product.category === "rice"),
+    },
+    {
+      title: "빵케이크",
+      description: "그림, 피규어, 레터링 중심의 주문시안",
+      icon: Cake,
+      items: SIMULATOR_PRODUCTS.filter((product) => product.category === "design"),
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex flex-col">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#242424] border-b border-white/10">
-        <button onClick={() => history.back()} className="text-white/70" style={{ minHeight: "unset" }}>
-          <ChevronLeft size={20} />
-        </button>
-        <p className="text-white font-semibold text-sm">케이크 시뮬레이터</p>
-      </div>
-      <div className="flex-1 px-4 py-8">
-        <div className="mx-auto max-w-md space-y-3">
-          <button
-            onClick={() => onChoose("rice")}
-            className="w-full text-left rounded-2xl border border-white/10 bg-white text-foreground p-5 shadow-sm"
-            style={{ minHeight: "unset" }}
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Flower2 size={22} />
-              </span>
-              <div>
-                <p className="font-semibold">앙금떡케이크</p>
-                <p className="mt-1 text-xs text-muted-foreground">원형 케이크, 꽃 배치, 레터링 중심 시안</p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-background">
+      <div className="border-b border-border bg-card/90 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
+          <button onClick={() => history.back()} className="text-muted-foreground hover:text-foreground" style={{ minHeight: "unset" }}>
+            <ChevronLeft size={20} />
           </button>
-          <button
-            onClick={() => onChoose("design")}
-            className="w-full text-left rounded-2xl border border-white/10 bg-white text-foreground p-5 shadow-sm"
-            style={{ minHeight: "unset" }}
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
-                <Cake size={22} />
-              </span>
-              <div>
-                <p className="font-semibold">디자인케이크</p>
-                <p className="mt-1 text-xs text-muted-foreground">원형 케이크, 사진, 스티커, 자유 레터링 중심 시안</p>
-              </div>
-            </div>
-          </button>
+          <div>
+            <p className="text-sm font-semibold">케이크 시뮬레이터</p>
+            <p className="text-[11px] text-muted-foreground">메뉴 선택 후 원형 케이크 시안을 만듭니다</p>
+          </div>
         </div>
       </div>
+      <main className="mx-auto max-w-5xl px-4 py-6 lg:py-8">
+        <div className="rounded-3xl bg-gradient-to-br from-primary/12 via-card to-[var(--color-cake-cream)] p-5 shadow-sm ring-1 ring-border">
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold text-primary">CakeFlow Simulator</p>
+            <h1 className="mt-2 text-2xl font-bold sm:text-3xl">주문할 케이크 메뉴를 먼저 선택하세요</h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              선택한 메뉴에 맞춰 시뮬레이터 도구, 가격 기준, 주문서 세부 옵션이 이어집니다.
+            </p>
+          </div>
+        </div>
+        <div className="mt-6 space-y-6">
+          {groups.map((group) => {
+            const Icon = group.icon;
+            return (
+              <section key={group.title} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon size={18} />
+                  </span>
+                  <div>
+                    <h2 className="font-semibold">{group.title}</h2>
+                    <p className="text-xs text-muted-foreground">{group.description}</p>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {group.items.map((product) => {
+                    const productExamples = examples?.[product.key] ?? DEFAULT_SIMULATOR_EXAMPLES[product.key] ?? [];
+                    return (
+                      <button
+                        key={product.key}
+                        onClick={() => onChoose(product.key)}
+                        className="overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                        style={{ minHeight: "unset" }}
+                      >
+                        <div className="grid grid-cols-[112px_1fr] sm:grid-cols-[148px_1fr]">
+                          <div className="relative aspect-square bg-muted">
+                            {productExamples[0] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={productExamples[0]} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                <Cake size={22} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex min-w-0 flex-col justify-between p-4">
+                            <div>
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="font-semibold">{product.title}</p>
+                                <span className="shrink-0 text-xs font-bold text-primary">
+                                  {product.basePrice > 0 ? formatWon(product.basePrice) : product.priceLabel}
+                                </span>
+                              </div>
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{product.description}</p>
+                            </div>
+                            <div className="mt-3 flex items-center gap-1.5">
+                              {productExamples.slice(0, 3).map((url, index) => (
+                                <span key={`${product.key}-${index}`} className="h-8 w-8 overflow-hidden rounded-lg bg-muted">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={url} alt="" className="h-full w-full object-cover" />
+                                </span>
+                              ))}
+                              <span className="ml-auto text-xs font-medium text-primary">시작하기</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </main>
     </div>
+  );
+}
+
+function ExampleStrip({
+  productTitle,
+  examples,
+}: {
+  productTitle: string;
+  examples: string[];
+}) {
+  if (examples.length === 0) return null;
+
+  return (
+    <section className="w-full rounded-2xl border border-border bg-card p-3 shadow-sm lg:max-w-[220px]">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold">예시 사진</p>
+          <p className="text-[10px] text-muted-foreground">{productTitle}</p>
+        </div>
+        <span className="text-[10px] font-medium text-primary">관리자 수정 가능</span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto lg:grid lg:grid-cols-1">
+        {examples.slice(0, 3).map((url, index) => (
+          <div key={`${url}-${index}`} className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-muted lg:h-28 lg:w-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="" className="h-full w-full object-cover" />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -172,13 +284,20 @@ function PageContent() {
   const searchParams = useSearchParams();
   const designId = searchParams.get("designId");
   const requestedCakeType = searchParams.get("cakeType");
-  const initialType = requestedCakeType === "rice" || requestedCakeType === "design" ? requestedCakeType : null;
+  const requestedProductKey = searchParams.get("productKey");
+  const initialProductKey = isProductKey(requestedProductKey) ? requestedProductKey : null;
+  const initialType =
+    initialProductKey
+      ? getProductVariant(initialProductKey)
+      : requestedCakeType === "rice" || requestedCakeType === "design"
+        ? requestedCakeType
+        : null;
   const stageRef = useRef<Konva.Stage | null>(null);
 
   const {
-    objects, selectedId, bgColor, historyIdx, history, cakeType, cakeSize, layoutPreset,
+    objects, selectedId, bgColor, historyIdx, history, cakeType, cakeSize, layoutPreset, productKey,
     addObject, updateObject, removeObject, setSelected, setBgColor,
-    setCakeType, setCakeSize, setLayoutPreset,
+    setCakeType, setProductKey, setCakeSize, setLayoutPreset,
     bringForward, sendBackward, undo, redo,
   } = useSimulatorStore();
 
@@ -189,21 +308,37 @@ function PageContent() {
   const [saving, setSaving] = useState(false);
   const [exportDone, setExportDone] = useState(false);
   const [removingBg, setRemovingBg] = useState(false);
+  const [examples, setExamples] = useState<SimulatorExampleMap>(DEFAULT_SIMULATOR_EXAMPLES);
 
   useEffect(() => {
     if (initialType) setCakeType(initialType);
-  }, [initialType, setCakeType]);
+    if (initialProductKey) setProductKey(initialProductKey);
+  }, [initialProductKey, initialType, setCakeType, setProductKey]);
 
-  const selectMode = (type: SimulatorCakeType) => {
+  useEffect(() => {
+    fetch("/api/simulator/examples")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.examples) setExamples(data.examples);
+      })
+      .catch(() => {});
+  }, []);
+
+  const selectProduct = (nextProductKey: ProductKey) => {
+    const type = getProductVariant(nextProductKey);
     setCakeType(type);
+    setProductKey(nextProductKey);
     setModeReady(true);
     const params = new URLSearchParams(searchParams.toString());
     params.set("cakeType", type);
+    params.set("productKey", nextProductKey);
     router.replace(`/cake/simulator?${params.toString()}`);
   };
 
   const selectedObj = objects.find((o) => o.id === selectedId);
   const isRice = cakeType === "rice";
+  const selectedProduct = getProduct(productKey ?? initialProductKey ?? (isRice ? "rice_flower" : "design_cake"));
+  const selectedExamples = examples?.[selectedProduct.key] ?? DEFAULT_SIMULATOR_EXAMPLES[selectedProduct.key] ?? [];
 
   const addImageToCanvas = useCallback((src: string) => {
     const img = new window.Image();
@@ -402,6 +537,7 @@ function PageContent() {
         const query = new URLSearchParams();
         query.set("simulatorSessionId", session.id);
         query.set("cakeType", cakeType);
+        if (productKey) query.set("productKey", productKey);
         if (designId) query.set("designId", designId);
         router.push(`/cake/order?${query.toString()}`);
       }, 800);
@@ -412,23 +548,28 @@ function PageContent() {
   };
 
   if (!modeReady) {
-    return <ModeChooser onChoose={selectMode} />;
+    return <ProductChooser examples={examples} onChoose={selectProduct} />;
   }
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 bg-[#242424] border-b border-white/10">
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-white/70 hover:text-white text-sm"
+          className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-sm"
           style={{ minHeight: "unset" }}
         >
           <ChevronLeft size={18} />
           뒤로
         </button>
         <div className="text-center">
-          <p className="text-white font-semibold text-sm">{isRice ? "앙금떡케이크 시안" : "디자인케이크 꾸미기"}</p>
-          {isRice && <p className="text-[10px] text-white/45">{cakeSize} · {layoutPreset ? RICE_PRESETS.find((p) => p.id === layoutPreset)?.label : "프리스타일"}</p>}
+          <p className="text-sm font-semibold">{selectedProduct.title}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {isRice
+              ? `${cakeSize} · ${layoutPreset ? RICE_PRESETS.find((p) => p.id === layoutPreset)?.label : "프리스타일"}`
+              : "원형 케이크 시안"}
+          </p>
         </div>
         <button
           onClick={handleExport}
@@ -443,17 +584,18 @@ function PageContent() {
           )}
           {saving ? (exportDone ? "완료!" : "저장중...") : "주문하기"}
         </button>
+        </div>
       </div>
 
       {isRice && (
-        <div className="bg-[#242424] border-b border-white/10 px-3 py-2 space-y-2">
+        <div className="border-b border-border bg-card px-3 py-2 space-y-2">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {CAKE_SIZE_OPTIONS.map((size) => (
               <button
                 key={size}
                 onClick={() => setCakeSize(size)}
                 className={`h-8 px-3 rounded-full text-xs font-medium border transition-colors ${
-                  cakeSize === size ? "bg-white text-[#242424] border-white" : "text-white/65 border-white/15"
+                  cakeSize === size ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground border-border bg-background"
                 }`}
                 style={{ minHeight: "unset" }}
               >
@@ -467,7 +609,7 @@ function PageContent() {
                 key={preset.id}
                 onClick={() => applyRicePreset(preset.id)}
                 className={`h-8 px-3 rounded-full text-xs font-medium border transition-colors ${
-                  layoutPreset === preset.id ? "bg-primary text-primary-foreground border-primary" : "text-white/65 border-white/15"
+                  layoutPreset === preset.id ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground border-border bg-background"
                 }`}
                 style={{ minHeight: "unset" }}
               >
@@ -478,15 +620,18 @@ function PageContent() {
         </div>
       )}
 
-      <div className="flex-1 flex items-center justify-center p-4 relative">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center gap-4 p-4 lg:flex-row lg:items-start lg:py-6">
+        <ExampleStrip productTitle={selectedProduct.title} examples={selectedExamples} />
+        <div className="relative flex flex-1 items-center justify-center">
         {removingBg && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 z-10 rounded-2xl">
             <Loader2 size={32} className="text-white animate-spin" />
             <p className="text-white text-sm">배경 제거 중...</p>
           </div>
         )}
-        <div className="rounded-3xl overflow-hidden shadow-2xl" style={{ width: CANVAS_SIZE, height: CANVAS_SIZE }}>
+        <div className="rounded-3xl overflow-hidden border border-border bg-card shadow-xl" style={{ width: CANVAS_SIZE, height: CANVAS_SIZE }}>
           <SimulatorCanvas stageRef={stageRef} />
+        </div>
         </div>
       </div>
 
@@ -496,12 +641,12 @@ function PageContent() {
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
-            className="mx-4 mb-2 flex items-center justify-center gap-2 bg-[#303030] rounded-2xl p-2 overflow-x-auto"
+            className="mx-4 mb-2 flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm overflow-x-auto"
           >
             {selectedObj.type === "text" && (
               <button
                 onClick={() => setTextOpen(true)}
-                className="flex items-center gap-1 px-3 h-8 rounded-xl text-white/70 hover:text-white hover:bg-white/10 text-xs transition-colors"
+                className="flex items-center gap-1 px-3 h-8 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs transition-colors"
                 style={{ minHeight: "unset" }}
               >
                 <Pencil size={14} />
@@ -510,7 +655,7 @@ function PageContent() {
             )}
             <button
               onClick={() => bringForward(selectedId)}
-              className="flex items-center gap-1 px-3 h-8 rounded-xl text-white/70 hover:text-white hover:bg-white/10 text-xs transition-colors"
+              className="flex items-center gap-1 px-3 h-8 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs transition-colors"
               style={{ minHeight: "unset" }}
             >
               <ArrowUp size={14} />
@@ -518,13 +663,13 @@ function PageContent() {
             </button>
             <button
               onClick={() => sendBackward(selectedId)}
-              className="flex items-center gap-1 px-3 h-8 rounded-xl text-white/70 hover:text-white hover:bg-white/10 text-xs transition-colors"
+              className="flex items-center gap-1 px-3 h-8 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs transition-colors"
               style={{ minHeight: "unset" }}
             >
               <ArrowDown size={14} />
               뒤로
             </button>
-            <div className="w-px h-4 bg-white/20" />
+            <div className="w-px h-4 bg-border" />
             <button
               onClick={() => removeObject(selectedId)}
               className="flex items-center gap-1 px-3 h-8 rounded-xl text-red-400 hover:bg-red-400/10 text-xs transition-colors"
@@ -543,10 +688,10 @@ function PageContent() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden bg-[#242424] border-t border-white/10"
+            className="overflow-hidden border-t border-border bg-card"
           >
             <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
-              <p className="text-white/50 text-xs flex-shrink-0">{isRice ? "설기색" : "케이크색"}</p>
+              <p className="text-muted-foreground text-xs flex-shrink-0">{isRice ? "설기색" : "케이크색"}</p>
               {BG_COLORS.map((color) => (
                 <button
                   key={color}
@@ -557,8 +702,8 @@ function PageContent() {
                   style={{ backgroundColor: color, minHeight: "unset" }}
                 />
               ))}
-              <label className="flex-shrink-0 w-8 h-8 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center cursor-pointer">
-                <span className="text-white/50 text-xs">+</span>
+              <label className="flex-shrink-0 w-8 h-8 rounded-full border-2 border-dashed border-border flex items-center justify-center cursor-pointer">
+                <span className="text-muted-foreground text-xs">+</span>
                 <input
                   type="color"
                   value={bgColor}
@@ -571,9 +716,9 @@ function PageContent() {
         )}
       </AnimatePresence>
 
-      <div className="bg-[#242424] border-t border-white/10 px-2 py-3">
-        <div className="flex items-center gap-1 overflow-x-auto text-white scrollbar-hide">
-          <label className="relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl text-xs text-white/60 hover:text-white hover:bg-white/10 cursor-pointer transition-all">
+      <div className="border-t border-border bg-card px-2 py-3">
+        <div className="mx-auto flex max-w-5xl items-center gap-1 overflow-x-auto scrollbar-hide">
+          <label className="relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl text-xs text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-all">
             <ImagePlus size={20} />
             <span className="whitespace-nowrap">{isRice ? "참고사진" : "이미지"}</span>
             <input

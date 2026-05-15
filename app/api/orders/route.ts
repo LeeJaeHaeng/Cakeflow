@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
-import { calculatePrice, formatWon, getProduct, type CakeOrderDetails } from "@/lib/orders/pricing";
+import { calculatePrice, formatWon, getProduct, type CakeOrderDetails, type ProductKey } from "@/lib/orders/pricing";
 
 export async function POST(request: Request) {
   try {
@@ -67,6 +67,7 @@ export async function POST(request: Request) {
       if (!state || typeof state !== "object") return "";
       const snapshot = state as {
         cakeType?: string;
+        productKey?: ProductKey | null;
         cakeSize?: string;
         layoutPreset?: string | null;
         referenceImageMode?: string;
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
         : "";
 
       const rows: Array<[string, unknown]> = [
-        ["시뮬레이터", snapshot.cakeType === "rice" ? "앙금떡케이크" : "디자인케이크"],
+        ["시뮬레이터 상품", snapshot.productKey ? getProduct(snapshot.productKey).title : snapshot.cakeType === "rice" ? "앙금떡케이크" : "디자인케이크"],
         ["시안 사이즈", snapshot.cakeSize],
         ["꽃 배치", snapshot.layoutPreset ? presetLabels[snapshot.layoutPreset] ?? snapshot.layoutPreset : ""],
         ["참고 이미지 용도", snapshot.referenceImageMode === "design-reference" ? "참고 디자인" : ""],

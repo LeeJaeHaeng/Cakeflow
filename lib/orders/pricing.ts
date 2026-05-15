@@ -77,7 +77,7 @@ export const PRODUCT_OPTIONS: Array<{
     title: "나이프플라워케이크",
     priceLabel: "55,000원",
     basePrice: 55000,
-    category: "design",
+    category: "rice",
     description: "높은 1호만 가능. 나이프로 그림 그리듯 디자인.",
   },
   {
@@ -113,6 +113,57 @@ export const PRODUCT_OPTIONS: Array<{
     description: "쿠키, 마카롱, 다쿠아즈, 시즌 보틀케이크 등 매장 판매 상품.",
   },
 ];
+
+export type SimulatorExampleMap = Record<ProductKey, string[]>;
+
+export const DEFAULT_SIMULATOR_EXAMPLES: SimulatorExampleMap = {
+  rice_flower: [
+    "https://images.unsplash.com/photo-1729875749558-826bfeb4b1bb?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1762571807494-f67e8bf035d2?w=640&h=640&fit=crop",
+  ],
+  tall_1_design: [
+    "https://images.unsplash.com/photo-1771738118209-fc3b654f431e?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1595859806061-8163067b3119?w=640&h=640&fit=crop",
+  ],
+  knife_flower: [
+    "https://images.unsplash.com/photo-1595859806061-8163067b3119?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1672749103540-6eb52167fecf?w=640&h=640&fit=crop",
+  ],
+  figure_cake: [
+    "https://images.unsplash.com/photo-1595859806061-8163067b3119?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1771738118209-fc3b654f431e?w=640&h=640&fit=crop",
+  ],
+  design_cake: [
+    "https://images.unsplash.com/photo-1595859806061-8163067b3119?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1771738118209-fc3b654f431e?w=640&h=640&fit=crop",
+  ],
+  number_rice: [
+    "https://images.unsplash.com/photo-1762571807494-f67e8bf035d2?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1729875749558-826bfeb4b1bb?w=640&h=640&fit=crop",
+  ],
+  dessert: [
+    "https://images.unsplash.com/photo-1672518478295-0e684ead1483?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1638518724390-671c222c18bb?w=640&h=640&fit=crop",
+  ],
+};
+
+export function normalizeSimulatorExamples(value: unknown): SimulatorExampleMap {
+  const next: SimulatorExampleMap = { ...DEFAULT_SIMULATOR_EXAMPLES };
+  if (!value || typeof value !== "object") return next;
+
+  PRODUCT_OPTIONS.forEach((product) => {
+    const raw = (value as Partial<Record<ProductKey, unknown>>)[product.key];
+    if (Array.isArray(raw)) {
+      const urls = raw
+        .filter((url): url is string => typeof url === "string")
+        .map((url) => url.trim())
+        .filter(Boolean);
+      next[product.key] = urls.length > 0 ? urls : DEFAULT_SIMULATOR_EXAMPLES[product.key];
+    }
+  });
+
+  return next;
+}
 
 export const SIZE_OPTIONS = ["1호", "2호", "3호", "4호"];
 export const RICE_SIZE_DETAILS = ["1호 (15x7)", "2호 (18x7)", "3호 (21x7)", "4호 (24x7)"];

@@ -41,6 +41,10 @@ interface StepProps {
 
 type CakeFormVariant = "design" | "rice";
 
+function isProductKey(value: string | null): value is ProductKey {
+  return PRODUCT_OPTIONS.some((product) => product.key === value);
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="block text-sm font-medium mb-1.5">{children}</label>;
 }
@@ -383,10 +387,12 @@ function StepRequests({
   onNext,
   onBack,
   variant,
-}: StepProps & { variant: CakeFormVariant }) {
+  selectedProductKey,
+}: StepProps & { variant: CakeFormVariant; selectedProductKey?: ProductKey }) {
   const saved = typeof window !== "undefined" ? sessionStorage.getItem("order_requests") : null;
   const initial = saved ? JSON.parse(saved) as CakeOrderDetails : null;
-  const defaultProduct = initial?.product_key ?? getDefaultProductForVariant(variant);
+  const defaultProduct = selectedProductKey ?? initial?.product_key ?? getDefaultProductForVariant(variant);
+  const productLocked = Boolean(selectedProductKey);
 
   const [details, setDetails] = useState<CakeOrderDetails>({
     form_variant: getProductVariant(defaultProduct),
@@ -463,29 +469,44 @@ function StepRequests({
 
       <div>
         <FieldLabel>상품</FieldLabel>
-        <div className="space-y-2">
-          {PRODUCT_OPTIONS.map((product) => (
-            <button
-              key={product.key}
-              type="button"
-              onClick={() => selectProduct(product.key)}
-              className={`w-full rounded-2xl border p-3 text-left transition-colors ${
-                details.product_key === product.key
-                  ? "border-primary bg-primary/10"
-                  : "border-border bg-background"
-              }`}
-              style={{ minHeight: "unset" }}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">{product.title}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{product.description}</p>
-                </div>
-                <span className="shrink-0 text-xs font-semibold text-primary">{product.priceLabel}</span>
+        {productLocked ? (
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-primary">{selectedProduct.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{selectedProduct.description}</p>
               </div>
-            </button>
-          ))}
-        </div>
+              <span className="shrink-0 text-xs font-semibold text-primary">{selectedProduct.priceLabel}</span>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              시뮬레이터에서 선택한 메뉴입니다. 메뉴 변경은 시뮬레이터 첫 화면에서 다시 선택하세요.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {PRODUCT_OPTIONS.map((product) => (
+              <button
+                key={product.key}
+                type="button"
+                onClick={() => selectProduct(product.key)}
+                className={`w-full rounded-2xl border p-3 text-left transition-colors ${
+                  details.product_key === product.key
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-background"
+                }`}
+                style={{ minHeight: "unset" }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{product.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{product.description}</p>
+                  </div>
+                  <span className="shrink-0 text-xs font-semibold text-primary">{product.priceLabel}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {selectedProduct.key !== "dessert" && selectedProduct.key !== "tall_1_design" && selectedProduct.key !== "knife_flower" && (
@@ -974,6 +995,8 @@ function PageContent() {
   const designId = searchParams.get("designId") ?? undefined;
   const simulatorSessionId = searchParams.get("simulatorSessionId") ?? undefined;
   const requestedCakeType = searchParams.get("cakeType");
+  const requestedProductKey = searchParams.get("productKey");
+  const selectedProductKey = isProductKey(requestedProductKey) ? requestedProductKey : undefined;
 
   const [step, setStep] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(() => {
@@ -983,9 +1006,12 @@ function PageContent() {
   const [designTitle, setDesignTitle] = useState<string | undefined>(undefined);
   const [designCategories, setDesignCategories] = useState<string[]>([]);
 
-  const formVariant: CakeFormVariant = requestedCakeType === "rice" || designCategories.some((category) => category === "rice_cake" || category === "flower")
+  const formVariant: CakeFormVariant = selectedProductKey
+    ? getProductVariant(selectedProductKey)
+    : requestedCakeType === "rice" || designCategories.some((category) => category === "rice_cake" || category === "flower")
     ? "rice"
     : "design";
+  const selectedProductTitle = selectedProductKey ? getProduct(selectedProductKey).title : undefined;
 
   // 시뮬레이터 세션 미리보기 & 디자인 제목 로드
   useEffect(() => {
@@ -1076,10 +1102,17 @@ function PageContent() {
                 onNext={next}
                 onBack={back}
                 previewUrl={previewUrl}
-                designTitle={designTitle ?? (designId ? "선택된 디자인" : undefined)}
+                designTitle={designTitle ?? selectedProductTitle ?? (designId ? "선택된 디자인" : undefined)}
               />
             )}
-            {step === 3 && <StepRequests onNext={next} onBack={back} variant={formVariant} />}
+            {step === 3 && (
+              <StepRequests
+                onNext={next}
+                onBack={back}
+                variant={formVariant}
+                selectedProductKey={selectedProductKey}
+              />
+            )}
             {step === 4 && (
               <StepPayment
                 onNext={next}

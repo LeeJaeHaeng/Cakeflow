@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createAdminSession, setAdminCookie } from "@/lib/auth/admin";
 
+async function loginWithEnvAdmin(email: string, password: string) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) return false;
+  if (email !== adminEmail || password !== adminPassword) return false;
+
+  const token = await createAdminSession({
+    userId: "env-admin",
+    email: adminEmail,
+  });
+  await setAdminCookie(token);
+  return true;
+}
+
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
@@ -11,6 +26,10 @@ export async function POST(request: Request) {
         { error: "이메일과 비밀번호를 입력해주세요." },
         { status: 400 }
       );
+    }
+
+    if (await loginWithEnvAdmin(email, password)) {
+      return NextResponse.json({ ok: true });
     }
 
     const supabase = await createServiceClient();

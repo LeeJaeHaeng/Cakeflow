@@ -269,7 +269,7 @@ export function SimulatorCanvas({ stageRef }: SimulatorCanvasProps) {
             y={0}
             width={CANVAS_SIZE}
             height={CANVAS_SIZE}
-            fill={isRound ? "#2A2A2A" : bgColor}
+            fill={isRound ? "#F6EFEA" : bgColor}
           />
 
           {isRound ? (
@@ -278,11 +278,11 @@ export function SimulatorCanvas({ stageRef }: SimulatorCanvasProps) {
                 x={cakeCenter}
                 y={cakeCenter}
                 radius={cakeRadius + 10}
-                fill="#111111"
-                opacity={0.28}
-                shadowColor="#000000"
+                fill="#8B6F66"
+                opacity={0.14}
+                shadowColor="#8B6F66"
                 shadowBlur={18}
-                shadowOpacity={0.35}
+                shadowOpacity={0.22}
               />
               <Circle
                 name="bg"

@@ -7,10 +7,10 @@
 - 고객용 주문 흐름: 디자인 탐색, 케이크 주문서 작성, 전화번호 OTP 인증, 주문 조회
 - 주문서 분기: 매장 메뉴 7종 기준 상품 선택, 옵션 입력, 100% 선입금 안내
 - 가격 계산: 확정 추가금 즉시 합산, 상담 필요 추가금 별도 표기, 주문 저장 시 총액/선입금액 반영
-- 케이크 시뮬레이터: 앙금떡케이크/디자인케이크 모드 선택, 원형 케이크 캔버스, 이미지/꽃배치/레터링 편집, 미리보기 저장
+- 케이크 시뮬레이터: 실제 메뉴 기반 선택, 원형 케이크 캔버스, 메뉴별 예시 사진, 이미지/꽃배치/레터링 편집, 미리보기 저장
 - 디저트 상품 페이지: 상품 목록, 품절 상태, 카카오톡/전화 문의 CTA
-- 관리자: 대시보드, 주문관리, 일정 캘린더, 고객관리, 디자인 관리, 디저트 상품 관리
-- Phase 4 관리자 기능: 통계 분석, 운영 설정, 리뷰 관리 API, SNS 캡션 생성/초안 저장
+- 관리자: 대시보드, 주문관리, 일정 캘린더, 고객관리, 디자인 관리, 시뮬레이터 예시 사진 관리, 디저트 상품 관리
+- Phase 4 관리자 기능: 통계 분석, 운영 설정, 리뷰 관리 API, SNS 캡션 생성/초안 저장, 로컬 이미지 업로드
 
 ## 기술 스택
 
@@ -42,6 +42,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
 ADMIN_JWT_SECRET=
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
 
 ALIGO_API_KEY=
 ALIGO_USER_ID=
@@ -60,8 +62,8 @@ OPENAI_API_KEY=
 - `/cake/order` 케이크 주문
 - `/cake/order?cakeType=rice` 앙금플라워 떡케이크 주문서 직접 진입
 - `/cake/simulator` 케이크 시뮬레이터
-- `/cake/simulator?cakeType=rice` 앙금떡케이크 전용 시뮬레이터
-- `/cake/simulator?cakeType=design` 디자인케이크 전용 시뮬레이터
+- `/cake/simulator?cakeType=rice&productKey=rice_flower` 앙금떡케이크 계열 시뮬레이터
+- `/cake/simulator?cakeType=design&productKey=design_cake` 빵케이크 계열 시뮬레이터
 - `/dessert` 디저트 상품
 - `/orders/track` 주문 조회
 - `/admin` 관리자 대시보드
@@ -69,6 +71,7 @@ OPENAI_API_KEY=
 - `/admin/calendar` 일정 캘린더
 - `/admin/customers` 고객관리
 - `/admin/designs` 디자인 관리
+- `/admin/simulator` 시뮬레이터 예시 사진 관리
 - `/admin/products` 디저트 상품 관리
 - `/admin/analytics` 통계 분석
 - `/admin/settings` 운영 설정
@@ -108,6 +111,25 @@ npm run build
   - 카드결제 선택 시 현재는 결제 링크 안내 상태로 주문을 접수합니다. 실제 PG 결제 승인/웹훅 연동은 다음 단계 작업입니다.
 - App Router 루트 에러 컴포넌트를 추가했습니다.
   - `app/error.tsx`, `app/global-error.tsx`, `app/not-found.tsx`를 추가해 dev 서버의 required error components refresh 문제를 해결했습니다.
+- 시뮬레이터와 관리자 UX를 추가 정리했습니다.
+  - `/cake/simulator` 첫 화면은 실제 메뉴 기준으로 앙금떡케이크 계열과 빵케이크 계열을 묶어 선택합니다.
+  - `나이프플라워케이크`는 앙금떡케이크 계열로 분류해 원형 앙금떡케이크 시뮬레이터와 주문서 흐름으로 연결합니다.
+  - 시뮬레이터 페이지는 고객 홈/주문서와 동일한 밝은 카드형 UI 톤으로 정리했습니다.
+  - 각 메뉴 카드와 편집 화면에서 해당 케이크 예시 사진을 표시합니다.
+- 관리자 시뮬레이터 관리 화면을 추가했습니다.
+  - `/admin/simulator`에서 메뉴별 예시 사진을 관리합니다.
+  - 예시 사진은 로컬 파일 업로드로 Supabase Storage에 저장하고, `shop_settings.simulator_examples`에 URL을 저장합니다.
+  - 예시 데이터가 없거나 API 오류가 있어도 기본 예시 이미지로 fallback합니다.
+- 관리자 이미지 업로드 흐름을 보강했습니다.
+  - 디자인 관리, 디저트 상품, SNS 포스트, 시뮬레이터 예시 사진에서 로컬 이미지 업로드를 사용합니다.
+  - `/api/upload`는 `cake-designs`, `simulator-previews` 버킷이 없을 경우 자동 생성 후 업로드를 재시도합니다.
+  - `jpg`, `jpeg`, `png`, `webp`, `heic`, `heif` 이미지를 허용하고, 업로드 실패 시 관리자 화면에 오류를 표시합니다.
+- 관리자 로그인 fallback을 추가했습니다.
+  - 기존 Supabase `verify_admin_password` RPC 로그인을 유지합니다.
+  - Supabase Auth/RPC 구성이 불안정한 환경에서도 `ADMIN_EMAIL`, `ADMIN_PASSWORD` 환경변수 기반 관리자 로그인이 가능합니다.
+  - 로컬 개발 기본 계정은 `.env.local`에 설정된 값을 사용합니다.
+- 관리자 표시 정보를 수정했습니다.
+  - 관리자 프로필 이름을 `김은숙 사장님`으로 변경했습니다.
 
 최근 검증 결과:
 
