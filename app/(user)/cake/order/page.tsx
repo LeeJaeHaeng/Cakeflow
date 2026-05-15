@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -17,6 +16,22 @@ import {
   Clock,
   ShieldCheck,
 } from "lucide-react";
+import {
+  DESIGN_SIZE_DETAILS,
+  FILLING_OPTIONS,
+  PRODUCT_OPTIONS,
+  RICE_BASE_OPTIONS,
+  RICE_SIZE_DETAILS,
+  SHEET_FLAVORS,
+  calculatePrice,
+  formatWon,
+  getDefaultProductForVariant,
+  getProduct,
+  getProductVariant,
+  type CakeOrderDetails,
+  type PaymentMethod,
+  type ProductKey,
+} from "@/lib/orders/pricing";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface StepProps {
@@ -25,40 +40,6 @@ interface StepProps {
 }
 
 type CakeFormVariant = "design" | "rice";
-
-type CakeDetails = {
-  form_variant: CakeFormVariant;
-  size?: string;
-  sheet_flavor?: string;
-  rice_base?: string;
-  two_tier?: boolean;
-  filling?: string[];
-  design_style?: string;
-  desired_color?: string;
-  lettering?: boolean;
-  phrase?: string;
-  candle?: boolean;
-  number_rice_cake?: boolean;
-  reference_note?: string;
-  allergy?: string;
-  extra_request?: string;
-};
-
-const DESIGN_SIZE_OPTIONS = [
-  "1호 (지름 15cm x 높이 6cm)",
-  "2호 (지름 18cm x 높이 6cm)",
-  "3호 (지름 21cm x 높이 6cm)",
-  "4호 (지름 24cm x 높이 6cm)",
-];
-
-const RICE_SIZE_OPTIONS = [
-  "1호 15x7",
-  "2호 18x7",
-  "3호 21x7",
-  "4호 24x7",
-];
-
-const FILLING_OPTIONS = ["견과류", "잼(딸기)", "잼(블루베리)", "단호박잼", "흑임자잼", "통단팥"];
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="block text-sm font-medium mb-1.5">{children}</label>;
@@ -359,7 +340,8 @@ function StepDesignConfirm({
 
       {previewUrl ? (
         <div className="relative aspect-square rounded-2xl overflow-hidden bg-muted">
-          <Image src={previewUrl} alt="디자인 미리보기" fill className="object-cover" sizes="100vw" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewUrl} alt="디자인 미리보기" className="h-full w-full object-cover" />
         </div>
       ) : (
         <div className="aspect-square rounded-2xl bg-muted flex items-center justify-center">
@@ -403,13 +385,17 @@ function StepRequests({
   variant,
 }: StepProps & { variant: CakeFormVariant }) {
   const saved = typeof window !== "undefined" ? sessionStorage.getItem("order_requests") : null;
-  const initial = saved ? JSON.parse(saved) as CakeDetails : null;
+  const initial = saved ? JSON.parse(saved) as CakeOrderDetails : null;
+  const defaultProduct = initial?.product_key ?? getDefaultProductForVariant(variant);
 
-  const [details, setDetails] = useState<CakeDetails>({
-    form_variant: variant,
+  const [details, setDetails] = useState<CakeOrderDetails>({
+    form_variant: getProductVariant(defaultProduct),
+    product_key: defaultProduct,
     size: initial?.size ?? "",
     sheet_flavor: initial?.sheet_flavor ?? "",
     rice_base: initial?.rice_base ?? "",
+    rice_flower_style: initial?.rice_flower_style ?? "basic",
+    number_count: initial?.number_count ?? 2,
     two_tier: initial?.two_tier ?? false,
     filling: initial?.filling ?? [],
     design_style: initial?.design_style ?? "",
@@ -422,9 +408,30 @@ function StepRequests({
     allergy: initial?.allergy ?? "",
     extra_request: initial?.extra_request ?? "",
   });
+  const selectedProduct = getProduct(details.product_key);
+  const selectedVariant = getProductVariant(details.product_key);
+  const quote = calculatePrice(details);
 
-  const update = (patch: Partial<CakeDetails>) => {
-    setDetails((prev) => ({ ...prev, ...patch, form_variant: variant }));
+  const update = (patch: Partial<CakeOrderDetails>) => {
+    setDetails((prev) => ({ ...prev, ...patch, form_variant: getProductVariant(prev.product_key) }));
+  };
+
+  const selectProduct = (productKey: ProductKey) => {
+    const nextVariant = getProductVariant(productKey);
+    setDetails((prev) => ({
+      ...prev,
+      product_key: productKey,
+      form_variant: nextVariant,
+      size: "",
+      sheet_flavor: "",
+      rice_base: "",
+      filling: [],
+      rice_flower_style: productKey === "rice_flower" ? "basic" : undefined,
+      number_count: productKey === "number_rice" ? 2 : undefined,
+      lettering: false,
+      two_tier: false,
+      number_rice_cake: productKey === "number_rice",
+    }));
   };
 
   const toggleFilling = (value: string) => {
@@ -433,12 +440,12 @@ function StepRequests({
       const next = current.includes(value)
         ? current.filter((item) => item !== value)
         : [...current, value];
-      return { ...prev, filling: next, form_variant: variant };
+      return { ...prev, filling: next, form_variant: selectedVariant };
     });
   };
 
   const handleNext = () => {
-    sessionStorage.setItem("order_requests", JSON.stringify({ ...details, form_variant: variant }));
+    sessionStorage.setItem("order_requests", JSON.stringify({ ...details, form_variant: selectedVariant }));
     onNext();
   };
 
@@ -447,54 +454,104 @@ function StepRequests({
     <div className="space-y-5">
       <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
         <p className="text-sm font-semibold text-primary">
-          {variant === "rice" ? "앙금플라워 떡케이크 주문서" : "디자인케이크 주문서"}
+          메뉴 선택
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {variant === "rice"
-            ? "떡케이크 전용 항목을 기준으로 제작 상담에 필요한 정보를 받습니다."
-            : "일반 디자인케이크 제작에 필요한 사이즈, 시트, 색상, 문구를 받습니다."}
+          매장 메뉴 기준으로 기본금액과 확정 추가금을 먼저 계산합니다.
         </p>
       </div>
 
       <div>
-        <FieldLabel>사이즈 선택</FieldLabel>
-        <div className="grid grid-cols-1 gap-2">
-          {(variant === "rice" ? RICE_SIZE_OPTIONS : DESIGN_SIZE_OPTIONS).map((size) => (
-            <OptionButton key={size} selected={details.size === size} onClick={() => update({ size })}>
-              {size}
-            </OptionButton>
+        <FieldLabel>상품</FieldLabel>
+        <div className="space-y-2">
+          {PRODUCT_OPTIONS.map((product) => (
+            <button
+              key={product.key}
+              type="button"
+              onClick={() => selectProduct(product.key)}
+              className={`w-full rounded-2xl border p-3 text-left transition-colors ${
+                details.product_key === product.key
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-background"
+              }`}
+              style={{ minHeight: "unset" }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{product.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{product.description}</p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-primary">{product.priceLabel}</span>
+              </div>
+            </button>
           ))}
         </div>
-        {variant === "rice" && (
-          <label className="mt-3 flex items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={details.two_tier ?? false}
-              onChange={(e) => update({ two_tier: e.target.checked })}
-              className="h-4 w-4 accent-primary"
-            />
-            2단 가능 여부 상담 희망
-          </label>
-        )}
       </div>
 
-      {variant === "design" ? (
+      {selectedProduct.key !== "dessert" && selectedProduct.key !== "tall_1_design" && selectedProduct.key !== "knife_flower" && (
         <div>
-          <FieldLabel>빵맛 선택</FieldLabel>
+          <FieldLabel>사이즈</FieldLabel>
+          <div className="grid grid-cols-2 gap-2">
+            {(selectedVariant === "rice" ? RICE_SIZE_DETAILS : DESIGN_SIZE_DETAILS).map((size) => (
+              <OptionButton key={size} selected={details.size === size} onClick={() => update({ size })}>
+                {size}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {selectedProduct.key === "number_rice" && (
+        <div>
+          <FieldLabel>숫자 개수</FieldLabel>
           <div className="grid grid-cols-3 gap-2">
-            {["바닐라", "초코", "얼그레이"].map((flavor) => (
+            {[1, 2, 3].map((count) => (
+              <OptionButton key={count} selected={details.number_count === count} onClick={() => update({ number_count: count })}>
+                {count}개
+              </OptionButton>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">숫자 1개당 40,000원, 최대 3개까지 가능합니다.</p>
+        </div>
+      )}
+
+      {selectedProduct.key === "rice_flower" && (
+        <div>
+          <FieldLabel>앙금플라워 스타일</FieldLabel>
+          <div className="grid grid-cols-1 gap-2">
+            <OptionButton selected={details.rice_flower_style === "basic"} onClick={() => update({ rice_flower_style: "basic" })}>
+              기본 스타일 (+0원)
+            </OptionButton>
+            <OptionButton selected={details.rice_flower_style === "wreath"} onClick={() => update({ rice_flower_style: "wreath" })}>
+              리스 스타일 (+7,000원)
+            </OptionButton>
+            <OptionButton selected={details.rice_flower_style === "blossom"} onClick={() => update({ rice_flower_style: "blossom" })}>
+              블라썸 가득메움 스타일 (+7,000원)
+            </OptionButton>
+          </div>
+        </div>
+      )}
+
+      {selectedVariant === "design" && selectedProduct.key !== "dessert" && (
+        <div>
+          <FieldLabel>빵맛</FieldLabel>
+          <div className="grid grid-cols-3 gap-2">
+            {SHEET_FLAVORS.map((flavor) => (
               <OptionButton key={flavor} selected={details.sheet_flavor === flavor} onClick={() => update({ sheet_flavor: flavor })}>
                 {flavor}
               </OptionButton>
             ))}
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">빵맛 추가금은 없습니다.</p>
         </div>
-      ) : (
+      )}
+
+      {selectedVariant === "rice" && selectedProduct.key !== "number_rice" && selectedProduct.key !== "dessert" && (
         <>
           <div>
-            <FieldLabel>케이크 종류</FieldLabel>
+            <FieldLabel>떡 종류</FieldLabel>
             <div className="grid grid-cols-3 gap-2">
-              {["백설기", "단호박", "흑임자"].map((base) => (
+              {RICE_BASE_OPTIONS.map((base) => (
                 <OptionButton key={base} selected={details.rice_base === base} onClick={() => update({ rice_base: base })}>
                   {base}
                 </OptionButton>
@@ -512,53 +569,99 @@ function StepRequests({
               ))}
             </div>
           </div>
-
-          <div>
-            <FieldLabel>디자인 스타일</FieldLabel>
-            <div className="grid grid-cols-2 gap-2">
-              {["화려한 꽃", "심플", "파스텔", "기타"].map((style) => (
-                <OptionButton key={style} selected={details.design_style === style} onClick={() => update({ design_style: style })}>
-                  {style}
-                </OptionButton>
-              ))}
-            </div>
-          </div>
         </>
       )}
 
-      <div>
-        <FieldLabel>원하시는 색감</FieldLabel>
-        <input
-          type="text"
-          value={details.desired_color ?? ""}
-          onChange={(e) => update({ desired_color: e.target.value })}
-          placeholder="예: 연핑크, 아이보리, 파스텔 보라"
-          className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-      </div>
+      {selectedProduct.key !== "dessert" && (
+        <div>
+          <FieldLabel>원하시는 색감 / 디자인 설명</FieldLabel>
+          <input
+            type="text"
+            value={details.desired_color ?? ""}
+            onChange={(e) => update({ desired_color: e.target.value })}
+            placeholder="예: 연핑크, 아이보리, 파스텔 보라"
+            className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+      )}
 
-      <div>
-        <FieldLabel>문구</FieldLabel>
-        <input
-          type="text"
-          value={details.phrase ?? ""}
-          onChange={(e) => update({ phrase: e.target.value })}
-          placeholder="예: 사랑합니다 / Happy Birthday"
-          className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-      </div>
+      {selectedProduct.key === "design_cake" || selectedProduct.key === "knife_flower" ? (
+        <div>
+          <FieldLabel>그림/디자인 난이도 설명</FieldLabel>
+          <textarea
+            value={details.design_style ?? ""}
+            onChange={(e) => update({ design_style: e.target.value })}
+            placeholder="그림, 캐릭터, 색상 수, 참고 이미지 분위기 등을 적어주세요. 디자인에 따라 추가금이 발생합니다."
+            rows={3}
+            className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+          />
+        </div>
+      ) : null}
 
-      {variant === "design" ? (
-        <label className="flex items-center gap-2 text-sm text-foreground">
+      {selectedProduct.key === "figure_cake" && (
+        <div>
+          <FieldLabel>피규어 요청</FieldLabel>
+          <textarea
+            value={details.figure_request ?? ""}
+            onChange={(e) => update({ figure_request: e.target.value })}
+            placeholder="사용할 피규어 종류나 준비 여부를 적어주세요. 피규어 가격은 별도입니다."
+            rows={3}
+            className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+          />
+        </div>
+      )}
+
+      {selectedProduct.key === "tall_1_design" && (
+        <div>
+          <FieldLabel>샹드리에초 / 티아라 요청</FieldLabel>
+          <input
+            type="text"
+            value={details.topper_request ?? ""}
+            onChange={(e) => update({ topper_request: e.target.value })}
+            placeholder="예: 티아라 올림 희망, 샹드리에초 상담"
+            className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+      )}
+
+      {selectedProduct.key !== "dessert" && (
+        <div>
+          <FieldLabel>문구</FieldLabel>
+          <input
+            type="text"
+            value={details.phrase ?? ""}
+            onChange={(e) => update({ phrase: e.target.value })}
+            placeholder="예: 사랑합니다 / Happy Birthday"
+            className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+      )}
+
+      {selectedProduct.key === "rice_flower" && (
+        <label className="flex items-center gap-2 rounded-xl bg-muted px-3 py-3 text-sm">
           <input
             type="checkbox"
             checked={details.lettering ?? false}
             onChange={(e) => update({ lettering: e.target.checked })}
             className="h-4 w-4 accent-primary"
           />
-          레터링 추가 상담 희망
+          문구 추가 (+3,000원)
         </label>
-      ) : (
+      )}
+
+      {selectedProduct.key === "figure_cake" || selectedProduct.key === "design_cake" ? (
+        <label className="flex items-center gap-2 rounded-xl bg-muted px-3 py-3 text-sm">
+          <input
+            type="checkbox"
+            checked={details.two_tier ?? false}
+            onChange={(e) => update({ two_tier: e.target.checked })}
+            className="h-4 w-4 accent-primary"
+          />
+          2단 / 높이 추가 상담
+        </label>
+      ) : null}
+
+      {selectedVariant === "rice" && selectedProduct.key !== "number_rice" && selectedProduct.key !== "dessert" && (
         <div className="grid grid-cols-2 gap-2">
           <label className="flex items-center gap-2 rounded-xl bg-muted px-3 py-3 text-sm">
             <input
@@ -569,42 +672,30 @@ function StepRequests({
             />
             초 추가 희망
           </label>
-          <label className="flex items-center gap-2 rounded-xl bg-muted px-3 py-3 text-sm">
-            <input
-              type="checkbox"
-              checked={details.number_rice_cake ?? false}
-              onChange={(e) => update({ number_rice_cake: e.target.checked })}
-              className="h-4 w-4 accent-primary"
-            />
-            숫자 떡케이크 상담
-          </label>
         </div>
       )}
 
-      {variant === "rice" && (
-        <>
-          <div>
-            <FieldLabel>참고사진 / 디자인 설명</FieldLabel>
-            <textarea
-              value={details.reference_note ?? ""}
-              onChange={(e) => update({ reference_note: e.target.value })}
-              placeholder="보내주실 참고사진 설명이나 원하는 이미지 분위기를 적어주세요."
-              rows={3}
-              className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
-            />
-          </div>
-          <div>
-            <FieldLabel>알레르기 여부</FieldLabel>
-            <input
-              type="text"
-              value={details.allergy ?? ""}
-              onChange={(e) => update({ allergy: e.target.value })}
-              placeholder="예: 견과류 알레르기 있음"
-              className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-        </>
-      )}
+      <div>
+        <FieldLabel>참고사진 / 설명</FieldLabel>
+        <textarea
+          value={details.reference_note ?? ""}
+          onChange={(e) => update({ reference_note: e.target.value })}
+          placeholder="보내주실 참고사진 설명이나 원하는 이미지 분위기를 적어주세요."
+          rows={3}
+          className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+        />
+      </div>
+
+      <div>
+        <FieldLabel>알레르기 여부</FieldLabel>
+        <input
+          type="text"
+          value={details.allergy ?? ""}
+          onChange={(e) => update({ allergy: e.target.value })}
+          placeholder="예: 견과류 알레르기 있음"
+          className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
+        />
+      </div>
 
       <div>
         <FieldLabel>기타 요청사항</FieldLabel>
@@ -615,6 +706,36 @@ function StepRequests({
           rows={4}
           className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
         />
+      </div>
+
+      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">예상 결제금액</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {quote.exact ? "선택 항목 기준 확정 금액입니다." : "확정 금액 + 상담 필요 항목이 있습니다."}
+            </p>
+          </div>
+          <p className="text-lg font-bold text-primary">{formatWon(quote.total)}</p>
+        </div>
+        <div className="mt-3 space-y-1 text-xs">
+          <div className="flex justify-between">
+            <span>{quote.productTitle} 기본금액</span>
+            <span>{formatWon(quote.basePrice)}</span>
+          </div>
+          {quote.addOns.map((item) => (
+            <div key={item.label} className="flex justify-between text-primary">
+              <span>{item.label}</span>
+              <span>+{formatWon(item.amount)}</span>
+            </div>
+          ))}
+          {quote.unknownItems.map((item) => (
+            <div key={item} className="flex justify-between text-amber-700">
+              <span>{item}</span>
+              <span>상담 후 확정</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="flex gap-3 pt-2">
@@ -639,24 +760,30 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
 
   const customer = JSON.parse(sessionStorage.getItem("order_customer") ?? "{}");
   const pickup = JSON.parse(sessionStorage.getItem("order_pickup") ?? "{}");
-  const requests = JSON.parse(sessionStorage.getItem("order_requests") ?? "{}") as CakeDetails;
+  const requests = JSON.parse(sessionStorage.getItem("order_requests") ?? "{}") as CakeOrderDetails;
+  const quote = calculatePrice(requests);
+  const selectedProduct = getProduct(requests.product_key);
 
   const detailRows = [
-    ["주문서", requests.form_variant === "rice" ? "앙금플라워 떡케이크" : "디자인케이크"],
+    ["상품", selectedProduct.title],
     ["사이즈", requests.size],
     ["빵맛", requests.sheet_flavor],
     ["떡 종류", requests.rice_base],
-    ["2단 상담", requests.two_tier ? "희망" : ""],
+    ["숫자 개수", requests.product_key === "number_rice" ? `${requests.number_count ?? 2}개` : ""],
+    ["앙금 스타일", requests.rice_flower_style === "wreath" ? "리스 스타일" : requests.rice_flower_style === "blossom" ? "블라썸 스타일" : ""],
     ["필링", requests.filling?.join(", ")],
-    ["디자인 스타일", requests.design_style],
+    ["디자인 설명", requests.design_style],
     ["색감", requests.desired_color],
     ["문구", requests.phrase],
-    ["레터링 추가", requests.lettering ? "희망" : ""],
+    ["문구 추가", requests.lettering ? "희망" : ""],
+    ["토퍼 요청", requests.topper_request],
+    ["피규어 요청", requests.figure_request],
+    ["2단/높이 상담", requests.two_tier ? "희망" : ""],
     ["초 추가", requests.candle ? "희망" : ""],
-    ["숫자 떡케이크", requests.number_rice_cake ? "상담 희망" : ""],
     ["참고사진/설명", requests.reference_note],
     ["알레르기", requests.allergy],
     ["기타 요청", requests.extra_request],
@@ -677,7 +804,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           persons: pickup.persons,
           customer_message: requests.extra_request,
           allergy: requests.allergy,
-          cake_details: requests,
+          cake_details: { ...requests, payment_method: paymentMethod },
           design_id: designId,
           simulator_session_id: simulatorSessionId,
           order_type: "cake",
@@ -711,6 +838,11 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
         <p className="text-muted-foreground text-sm text-center">
           주문번호 <strong className="text-foreground">{orderNumber}</strong>로<br />
           접수되었습니다. 잠시 후 주문 조회 페이지로 이동합니다.
+        </p>
+        <p className="rounded-2xl bg-primary/5 px-4 py-3 text-center text-xs leading-relaxed text-primary">
+          {paymentMethod === "card"
+            ? "카드결제 링크 확인 후 100% 선입금이 완료되면 예약이 확정됩니다."
+            : "계좌이체 입금 안내 확인 후 100% 선입금이 완료되면 예약이 확정됩니다."}
         </p>
       </div>
     );
@@ -749,11 +881,70 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
         ))}
       </div>
 
+      <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
+        <p className="text-sm font-semibold flex items-center gap-1.5">
+          <CreditCard size={14} /> 가격 확인
+        </p>
+        <div className="space-y-1 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">{quote.productTitle} 기본금액</span>
+            <span>{formatWon(quote.basePrice)}</span>
+          </div>
+          {quote.addOns.map((item) => (
+            <div key={item.label} className="flex justify-between text-primary">
+              <span>{item.label}</span>
+              <span>+{formatWon(item.amount)}</span>
+            </div>
+          ))}
+          {quote.unknownItems.map((item) => (
+            <div key={item} className="flex justify-between text-amber-700">
+              <span>{item}</span>
+              <span>상담 후 확정</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+          <span className="text-sm font-semibold">선입금 결제금액</span>
+          <span className="text-xl font-bold text-primary">{formatWon(quote.total)}</span>
+        </div>
+        {!quote.exact && (
+          <p className="text-xs text-amber-700">
+            위 금액은 현재 확정 가능한 금액입니다. 상담 필요 항목은 사장님 확인 후 최종 결제금액에 반영됩니다.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
+        <p className="text-sm font-semibold">결제 방식</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("card")}
+            className={`rounded-xl border px-3 py-3 text-sm font-medium ${
+              paymentMethod === "card" ? "border-primary bg-primary/10 text-primary" : "border-border"
+            }`}
+            style={{ minHeight: "unset" }}
+          >
+            카드결제
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("bank_transfer")}
+            className={`rounded-xl border px-3 py-3 text-sm font-medium ${
+              paymentMethod === "bank_transfer" ? "border-primary bg-primary/10 text-primary" : "border-border"
+            }`}
+            style={{ minHeight: "unset" }}
+          >
+            계좌이체
+          </button>
+        </div>
+      </div>
+
       <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl text-xs text-primary space-y-1">
-        <p className="font-medium flex items-center gap-1.5"><ShieldCheck size={13} /> 주문 안내</p>
-        <p>• 주문 접수 후 카카오톡/문자로 확인 연락드립니다.</p>
-        <p>• 정확한 금액은 디자인 상담 후 안내됩니다.</p>
-        <p>• 예약은 입금 확인 후 확정됩니다.</p>
+        <p className="font-medium flex items-center gap-1.5"><ShieldCheck size={13} /> 100% 선입금 안내</p>
+        <p>• 예약은 결제금액 100% 선입금 완료 후 확정됩니다.</p>
+        <p>• 카드결제 선택 시 주문 접수 후 카드 결제 링크로 결제가 진행됩니다.</p>
+        <p>• 계좌이체 선택 시 사장님 확인 후 입금 계좌를 안내드립니다.</p>
       </div>
 
       <div className="flex gap-3 pt-2">
@@ -767,7 +958,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           style={{ minHeight: "unset" }}
         >
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-          {submitting ? "처리중..." : "주문 신청하기"}
+          {submitting ? "처리중..." : paymentMethod === "card" ? "카드결제 요청하기" : "주문 신청하기"}
         </button>
       </div>
     </div>
@@ -785,7 +976,10 @@ function PageContent() {
   const requestedCakeType = searchParams.get("cakeType");
 
   const [step, setStep] = useState(0);
-  const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(() => {
+    if (!simulatorSessionId || typeof window === "undefined") return undefined;
+    return sessionStorage.getItem(`simulator_preview_${simulatorSessionId}`) ?? undefined;
+  });
   const [designTitle, setDesignTitle] = useState<string | undefined>(undefined);
   const [designCategories, setDesignCategories] = useState<string[]>([]);
 
@@ -796,9 +990,17 @@ function PageContent() {
   // 시뮬레이터 세션 미리보기 & 디자인 제목 로드
   useEffect(() => {
     if (simulatorSessionId) {
+      const localPreview = sessionStorage.getItem(`simulator_preview_${simulatorSessionId}`);
+
       fetch(`/api/simulator/sessions?id=${simulatorSessionId}`)
         .then((r) => r.json())
-        .then((d) => { if (d.preview_url) setPreviewUrl(d.preview_url); })
+        .then((d) => {
+          if (d.preview_url) {
+            setPreviewUrl(d.preview_url);
+          } else if (localPreview) {
+            setPreviewUrl(localPreview);
+          }
+        })
         .catch(() => {});
     }
     if (designId) {

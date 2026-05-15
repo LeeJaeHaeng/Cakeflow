@@ -2,6 +2,11 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 
 export type SimObjectType = "image" | "sticker" | "text";
+export type SimulatorCakeType = "design" | "rice";
+export type SimulatorCanvasShape = "square" | "round";
+export type LetteringMode = "straight" | "arc";
+export type LetteringPlacement = "center" | "bottom" | "edge" | "free";
+export type RiceLayoutPreset = "crescent" | "wreath" | "half" | "dome" | "free";
 
 export interface SimObject {
   id: string;
@@ -15,6 +20,8 @@ export interface SimObject {
   scaleY: number;
   // image / sticker
   src?: string;
+  opacity?: number;
+  role?: "reference" | "flower" | "decor" | "lettering";
   // text
   text?: string;
   fontSize?: number;
@@ -22,17 +29,37 @@ export interface SimObject {
   fontFamily?: string;
   fontStyle?: string;
   align?: string;
+  textMode?: LetteringMode;
+  placement?: LetteringPlacement;
 }
 
 export interface SimulatorSnapshot {
   objects: SimObject[];
   bgColor: string;
+  cakeType: SimulatorCakeType;
+  canvasShape: SimulatorCanvasShape;
+  cakeSize: string;
+  referenceImageMode: "design-reference" | "print-image";
+  layoutPreset: RiceLayoutPreset | null;
+  lettering: Array<{
+    text: string;
+    mode: LetteringMode;
+    placement: LetteringPlacement;
+    fill?: string;
+    fontFamily?: string;
+    fontSize?: number;
+  }>;
 }
 
 interface SimulatorStore {
   objects: SimObject[];
   selectedId: string | null;
   bgColor: string;
+  cakeType: SimulatorCakeType;
+  canvasShape: SimulatorCanvasShape;
+  cakeSize: string;
+  referenceImageMode: "design-reference" | "print-image";
+  layoutPreset: RiceLayoutPreset | null;
   designId: string | null;
   history: SimulatorSnapshot[];
   historyIdx: number;
@@ -43,6 +70,9 @@ interface SimulatorStore {
   removeObject: (id: string) => void;
   setSelected: (id: string | null) => void;
   setBgColor: (color: string) => void;
+  setCakeType: (cakeType: SimulatorCakeType) => void;
+  setCakeSize: (cakeSize: string) => void;
+  setLayoutPreset: (preset: RiceLayoutPreset | null) => void;
   setDesignId: (id: string | null) => void;
   bringForward: (id: string) => void;
   sendBackward: (id: string) => void;
@@ -54,14 +84,46 @@ interface SimulatorStore {
   getSnapshot: () => SimulatorSnapshot;
 }
 
-function snapshot(objects: SimObject[], bgColor: string): SimulatorSnapshot {
-  return { objects: JSON.parse(JSON.stringify(objects)), bgColor };
+function buildSnapshot(state: {
+  objects: SimObject[];
+  bgColor: string;
+  cakeType: SimulatorCakeType;
+  canvasShape: SimulatorCanvasShape;
+  cakeSize: string;
+  referenceImageMode: "design-reference" | "print-image";
+  layoutPreset: RiceLayoutPreset | null;
+}): SimulatorSnapshot {
+  const objects = JSON.parse(JSON.stringify(state.objects)) as SimObject[];
+  return {
+    objects,
+    bgColor: state.bgColor,
+    cakeType: state.cakeType,
+    canvasShape: state.canvasShape,
+    cakeSize: state.cakeSize,
+    referenceImageMode: state.referenceImageMode,
+    layoutPreset: state.layoutPreset,
+    lettering: objects
+      .filter((object) => object.type === "text" && object.text?.trim())
+      .map((object) => ({
+        text: object.text ?? "",
+        mode: object.textMode ?? "straight",
+        placement: object.placement ?? "free",
+        fill: object.fill,
+        fontFamily: object.fontFamily,
+        fontSize: object.fontSize,
+      })),
+  };
 }
 
 export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
   objects: [],
   selectedId: null,
   bgColor: "#FFF5F5",
+  cakeType: "design",
+  canvasShape: "round",
+  cakeSize: "1호",
+  referenceImageMode: "print-image",
+  layoutPreset: null,
   designId: null,
   history: [],
   historyIdx: -1,
@@ -70,7 +132,7 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
     const newObj: SimObject = { ...obj, id: nanoid() };
     set((s) => {
       const objects = [...s.objects, newObj];
-      const snap = snapshot(objects, s.bgColor);
+      const snap = buildSnapshot({ ...s, objects });
       const history = [...s.history.slice(0, s.historyIdx + 1), snap];
       return { objects, selectedId: newObj.id, history, historyIdx: history.length - 1 };
     });
@@ -86,7 +148,7 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
   removeObject: (id) => {
     set((s) => {
       const objects = s.objects.filter((o) => o.id !== id);
-      const snap = snapshot(objects, s.bgColor);
+      const snap = buildSnapshot({ ...s, objects });
       const history = [...s.history.slice(0, s.historyIdx + 1), snap];
       return { objects, selectedId: null, history, historyIdx: history.length - 1 };
     });
@@ -96,9 +158,37 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
 
   setBgColor: (color) => {
     set((s) => {
-      const snap = snapshot(s.objects, color);
+      const snap = buildSnapshot({ ...s, bgColor: color });
       const history = [...s.history.slice(0, s.historyIdx + 1), snap];
       return { bgColor: color, history, historyIdx: history.length - 1 };
+    });
+  },
+
+  setCakeType: (cakeType) => {
+    set((s) => {
+      const canvasShape: SimulatorCanvasShape = "round";
+      const referenceImageMode = cakeType === "rice" ? "design-reference" : "print-image";
+      const snap = buildSnapshot({ ...s, cakeType, canvasShape, referenceImageMode });
+      const history = [...s.history.slice(0, s.historyIdx + 1), snap];
+      return {
+        cakeType,
+        canvasShape,
+        referenceImageMode,
+        layoutPreset: cakeType === "rice" ? s.layoutPreset : null,
+        selectedId: null,
+        history,
+        historyIdx: history.length - 1,
+      };
+    });
+  },
+
+  setCakeSize: (cakeSize) => set({ cakeSize }),
+
+  setLayoutPreset: (preset) => {
+    set((s) => {
+      const snap = buildSnapshot({ ...s, layoutPreset: preset });
+      const history = [...s.history.slice(0, s.historyIdx + 1), snap];
+      return { layoutPreset: preset, history, historyIdx: history.length - 1 };
     });
   },
 
@@ -148,7 +238,7 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
   clearAll: () => {
     set((s) => {
       const objects: SimObject[] = [];
-      const snap = snapshot(objects, s.bgColor);
+      const snap = buildSnapshot({ ...s, objects });
       const history = [...s.history, snap];
       return { objects, selectedId: null, history, historyIdx: history.length - 1 };
     });
@@ -156,6 +246,6 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
 
   getSnapshot: () => {
     const s = get();
-    return snapshot(s.objects, s.bgColor);
+    return buildSnapshot(s);
   },
 }));
