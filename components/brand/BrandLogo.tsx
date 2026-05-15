@@ -9,10 +9,10 @@ type BrandLogoProps = {
 export function BrandLogo({ className, priority = false }: BrandLogoProps) {
   return (
     <Image
-      src="/brand/anggeum-cake-logo.svg"
+      src="/brand/anggeum-cake-logo.png"
       alt="앙금앤케이크 로고"
-      width={260}
-      height={105}
+      width={587}
+      height={139}
       priority={priority}
       className={cn("block h-auto w-auto object-contain", className)}
     />
