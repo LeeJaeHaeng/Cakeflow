@@ -48,7 +48,22 @@ ADMIN_PASSWORD=
 ALIGO_API_KEY=
 ALIGO_USER_ID=
 ALIGO_SENDER=
+ALIGO_KAKAO_SENDER_KEY=
+ALIGO_TPL_ORDER_RECEIVED=
+ALIGO_TPL_PAYMENT_PAID=
+ALIGO_TPL_QUOTE_NEEDED=
+ALIGO_TPL_CONFIRMED=
+ALIGO_TPL_PRODUCING=
+ALIGO_TPL_READY=
+ALIGO_TPL_COMPLETED=
+ALIGO_TPL_CANCELLED=
+ALIGO_TPL_REVIEW_REQUEST=
 SMS_MOCK_MODE=true
+
+NEXT_PUBLIC_PORTONE_STORE_ID=
+NEXT_PUBLIC_PORTONE_CHANNEL_KEY=
+PORTONE_API_SECRET=
+PORTONE_WEBHOOK_SECRET=
 
 OPENAI_API_KEY=
 ```
@@ -68,6 +83,7 @@ OPENAI_API_KEY=
 - `/orders/track` 주문 조회
 - `/admin` 관리자 대시보드
 - `/admin/orders` 주문관리
+- `/admin/orders/[id]` 주문 상세 운영 콘솔
 - `/admin/calendar` 일정 캘린더
 - `/admin/customers` 고객관리
 - `/admin/designs` 디자인 관리
@@ -88,6 +104,16 @@ npm run build
 현재 기준으로 타입체크, lint, production build가 통과해야 커밋 가능한 상태로 봅니다.
 
 ## 현재 진행상황
+
+### 2026-05-17
+
+- 실서비스 운영 레이어를 추가했습니다.
+  - PortOne V2 브라우저/서버 SDK를 추가하고 카드 100% 선결제 주문의 결제 요청, 결제 검증, 웹훅, 환불 API를 구성했습니다.
+  - 상담 필요 주문은 온라인 결제 없이 `pending_quote`로 접수하고, 관리자 주문 상세에서 사장님이 확정 금액/계좌이체 입금 확인 후 예약 확정할 수 있습니다.
+  - Aligo 알림톡 발송 모듈을 추가하고 템플릿 코드가 없거나 실패하면 SMS로 fallback하도록 구성했습니다.
+  - 주문 상태 변경, 알림 발송, 결제 이벤트를 DB에 이력으로 남기는 운영 테이블 마이그레이션을 추가했습니다.
+  - `/admin/orders/[id]` 상세 화면에서 주문서 원문, 시뮬레이터 이미지, 결제/상태/알림 이력, 작업지시서 다운로드를 확인할 수 있습니다.
+  - `/orders/track`는 주문번호 조회, 결제상태, 상담/온라인 결제 구분, 사장님 메모를 보여주도록 확장했습니다.
 
 ### 2026-05-16
 

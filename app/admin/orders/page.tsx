@@ -21,12 +21,14 @@ import {
 } from "lucide-react";
 
 const TABS = [
-  { key: "all",    label: "전체",    statuses: [] },
-  { key: "new",    label: "신규",    statuses: ["pending"] },
-  { key: "active", label: "진행중",  statuses: ["confirmed", "producing"] },
-  { key: "ready",  label: "픽업대기",statuses: ["ready"] },
-  { key: "done",   label: "완료",    statuses: ["completed"] },
-  { key: "cancel", label: "취소",    statuses: ["cancelled", "refunded"] },
+  { key: "all",    label: "전체",      statuses: [] },
+  { key: "new",    label: "신규",      statuses: ["pending"] },
+  { key: "quote",  label: "협의필요",  statuses: ["pending"], quote: true },
+  { key: "paid",   label: "결제완료",  statuses: ["confirmed"], paid: true },
+  { key: "active", label: "제작중",    statuses: ["producing"] },
+  { key: "ready",  label: "픽업대기",  statuses: ["ready"] },
+  { key: "done",   label: "완료",      statuses: ["completed"] },
+  { key: "cancel", label: "취소",      statuses: ["cancelled", "refunded"] },
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
@@ -66,6 +68,10 @@ interface Order {
   total_price: number;
   deposit_amount: number;
   payment_status: string;
+  quote_status?: string;
+  requires_consultation?: boolean;
+  confirmed_price?: number | null;
+  payment_due_at?: string | null;
   pickup_date: string;
   pickup_time: string | null;
   customer_message: string | null;
@@ -120,6 +126,12 @@ function OrderCard({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{customer?.name ?? "고객명 없음"}</span>
             <span className="text-xs text-muted-foreground font-mono">{order.order_number}</span>
+            {order.requires_consultation && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">협의필요</span>
+            )}
+            {order.payment_status === "paid" && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-medium">결제완료</span>
+            )}
             {order.payment_status === "unpaid" && order.deposit_amount === 0 && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-medium">미입금</span>
             )}
@@ -188,12 +200,33 @@ function OrderCard({
                 </div>
               )}
 
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">견적 상태</p>
+                  <p className="font-medium">{order.quote_status ?? "not_required"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">확정 금액</p>
+                  <p className="font-medium">₩{Number(order.confirmed_price ?? order.total_price).toLocaleString()}</p>
+                </div>
+              </div>
+
               {order.admin_memo && (
                 <div className="bg-muted rounded-xl p-3 text-sm">
                   <p className="text-xs text-muted-foreground font-medium mb-1">관리자 메모</p>
                   <p className="whitespace-pre-wrap">{order.admin_memo}</p>
                 </div>
               )}
+
+              <div className="flex gap-2 flex-wrap">
+                <a
+                  href={`/admin/orders/${order.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-card border border-border text-foreground hover:bg-muted"
+                >
+                  상세 운영
+                </a>
+              </div>
 
               {NEXT_ACTIONS[order.status] && (
                 <div className="flex gap-2 flex-wrap">
@@ -243,12 +276,17 @@ export default function OrdersPage() {
   }, [fetchOrders]);
 
   const tab = TABS.find((t) => t.key === activeTab)!;
-  const filtered = orders.filter((o) =>
-    tab.statuses.length === 0 || tab.statuses.includes(o.status)
-  );
+  const filtered = orders.filter((o) => {
+    if (tab.key === "quote") return Boolean(o.requires_consultation) || o.quote_status === "pending_quote";
+    if (tab.key === "paid") return o.payment_status === "paid" && o.status === "confirmed";
+    return tab.statuses.length === 0 || tab.statuses.includes(o.status);
+  });
 
-  const countByTab = (statuses: string[]) =>
-    statuses.length === 0 ? orders.length : orders.filter((o) => statuses.includes(o.status)).length;
+  const countByTab = (item: typeof TABS[number]) => {
+    if (item.key === "quote") return orders.filter((o) => Boolean(o.requires_consultation) || o.quote_status === "pending_quote").length;
+    if (item.key === "paid") return orders.filter((o) => o.payment_status === "paid" && o.status === "confirmed").length;
+    return item.statuses.length === 0 ? orders.length : orders.filter((o) => item.statuses.includes(o.status)).length;
+  };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     await fetch(`/api/admin/orders/${id}`, {
@@ -280,7 +318,7 @@ export default function OrdersPage() {
       {/* Tabs */}
       <div className="flex gap-1 bg-muted p-1 rounded-2xl overflow-x-auto">
         {TABS.map((tab) => {
-          const count = countByTab(tab.statuses);
+          const count = countByTab(tab);
           return (
             <button
               key={tab.key}

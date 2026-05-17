@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServiceClient } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
 import { calculatePrice, formatWon, getProduct, type CakeOrderDetails, type ProductKey } from "@/lib/orders/pricing";
+import { sendOperationalNotification } from "@/lib/notifications/aligo";
+import { buildPaymentId, getInitialQuoteStatus, recordOrderStatusEvent, shouldRequireConsultation } from "@/lib/orders/status";
+import { getPublicPortOneConfig } from "@/lib/payments/portone";
 
 export async function POST(request: Request) {
   try {
@@ -18,11 +22,18 @@ export async function POST(request: Request) {
       simulator_session_id,
       order_type = "cake",
       delivery_method = "pickup",
+      source_channel = "web",
     } = body;
 
     if (!customer_name || !customer_phone || !pickup_date) {
       return NextResponse.json({ error: "필수 정보가 누락되었습니다." }, { status: 400 });
     }
+
+    const isMissingColumnError = (error: unknown) => {
+      if (!error || typeof error !== "object") return false;
+      const err = error as { code?: string; message?: string };
+      return err.code === "PGRST204" || Boolean(err.message?.includes("schema cache"));
+    };
 
     const formatCakeDetails = (details: Record<string, unknown> | null | undefined) => {
       if (!details || typeof details !== "object") return "";
@@ -54,7 +65,7 @@ export async function POST(request: Request) {
         ["상담 필요 추가금", quote.unknownItems.join(", ")],
         ["선입금 결제금액", `${formatWon(quote.total)}${quote.exact ? "" : " + 상담 후 추가금"}`],
         ["결제 방식", paymentMethod],
-        ["선입금 안내", "예약은 결제금액 100% 선입금 완료 후 확정"],
+        ["예약 안내", quote.exact && details.payment_method === "card" ? "카드 결제 완료 후 예약 확정" : "사장님 확인 후 카카오톡/전화 상담 및 계좌이체 입금으로 예약 확정"],
       ];
 
       return rows
@@ -71,26 +82,10 @@ export async function POST(request: Request) {
         cakeSize?: string;
         layoutPreset?: string | null;
         referenceImageMode?: string;
-        lettering?: Array<{
-          text?: string;
-          mode?: string;
-          placement?: string;
-          fontSize?: number;
-        }>;
+        lettering?: Array<{ text?: string; mode?: string; placement?: string; fontSize?: number }>;
       };
-      const presetLabels: Record<string, string> = {
-        crescent: "크레센트",
-        wreath: "리스",
-        half: "반달",
-        dome: "돔형",
-        free: "프리스타일",
-      };
-      const placementLabels: Record<string, string> = {
-        center: "중앙",
-        bottom: "하단",
-        edge: "테두리",
-        free: "자유",
-      };
+      const presetLabels: Record<string, string> = { crescent: "크레센트", wreath: "리스", half: "반달", dome: "돔형", free: "프리스타일" };
+      const placementLabels: Record<string, string> = { center: "중앙", bottom: "하단", edge: "테두리", free: "자유" };
       const lettering = Array.isArray(snapshot.lettering)
         ? snapshot.lettering
             .filter((item) => item.text?.trim())
@@ -116,7 +111,6 @@ export async function POST(request: Request) {
         .join("\n");
     };
 
-    // 전화번호 정규화: 숫자만 추출 후 010-XXXX-XXXX 형식
     const phoneDigits = String(customer_phone).replace(/[^0-9]/g, "");
     const normalizedPhone = phoneDigits.length === 11
       ? `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 7)}-${phoneDigits.slice(7)}`
@@ -124,7 +118,6 @@ export async function POST(request: Request) {
 
     const supabase = await createServiceClient();
 
-    // 고객 upsert (전화번호 기준)
     const { data: existing } = await supabase
       .from("customers")
       .select("id")
@@ -137,22 +130,27 @@ export async function POST(request: Request) {
       customerId = existing.id;
       await supabase.from("customers").update({
         name: customer_name,
+        allergy: allergy || (cake_details as CakeOrderDetails | undefined)?.allergy || null,
         updated_at: new Date().toISOString(),
       }).eq("id", customerId);
     } else {
       const { data: newCustomer, error: customerErr } = await supabase
         .from("customers")
-        .insert({ name: customer_name, phone: normalizedPhone })
+        .insert({ name: customer_name, phone: normalizedPhone, allergy: allergy || (cake_details as CakeOrderDetails | undefined)?.allergy || null })
         .select("id")
         .single();
       if (customerErr || !newCustomer) throw customerErr;
       customerId = newCustomer.id;
     }
 
-    // 주문번호 생성 (CF + yyyyMMdd + 4자리 랜덤)
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const orderNumber = `CF${today}${nanoid(4).toUpperCase()}`;
-    const priceQuote = calculatePrice(cake_details as CakeOrderDetails);
+    const details = (cake_details ?? {}) as CakeOrderDetails;
+    const priceQuote = calculatePrice(details);
+    const paymentMethod = details.payment_method ?? "card";
+    const requestedConsultation = shouldRequireConsultation(priceQuote.exact, paymentMethod);
+    const paymentDueAt = !requestedConsultation ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
+
     let simulatorDetails = "";
     if (simulator_session_id) {
       const { data: simulatorSession } = await supabase
@@ -163,7 +161,7 @@ export async function POST(request: Request) {
       simulatorDetails = formatSimulatorDetails(simulatorSession?.state_json);
     }
 
-    const formattedDetails = formatCakeDetails(cake_details);
+    const formattedDetails = formatCakeDetails(details as Record<string, unknown>);
     const combinedMessage = [
       formattedDetails,
       simulatorDetails,
@@ -171,53 +169,137 @@ export async function POST(request: Request) {
       !formattedDetails && allergy ? `알레르기: ${allergy}` : "",
     ].filter(Boolean).join("\n");
 
-    // 주문 생성
-    const { data: order, error: orderErr } = await supabase
-      .from("orders")
-      .insert({
-        order_number: orderNumber,
-        customer_id: customerId,
-        order_type,
-        delivery_method,
-        pickup_date,
-        pickup_time: pickup_time ?? null,
-        customer_message: combinedMessage || null,
-        simulator_session_id: simulator_session_id ?? null,
-        total_price: priceQuote.total,
-        deposit_amount: priceQuote.total,
-        status: "pending",
-        payment_status: "unpaid",
-      })
-      .select()
-      .single();
+    const productionInsert = {
+      order_number: orderNumber,
+      customer_id: customerId,
+      order_type,
+      delivery_method,
+      pickup_date,
+      pickup_time: pickup_time ?? null,
+      customer_message: combinedMessage || null,
+      simulator_session_id: simulator_session_id ?? null,
+      total_price: priceQuote.total,
+      deposit_amount: requestedConsultation ? 0 : priceQuote.total,
+      confirmed_price: requestedConsultation ? null : priceQuote.total,
+      payment_due_at: paymentDueAt,
+      quote_status: getInitialQuoteStatus(requestedConsultation),
+      requires_consultation: requestedConsultation,
+      source_channel,
+      status: "pending",
+      payment_status: "unpaid",
+    };
 
+    let supportsProductionOps = true;
+    let orderResult = await (supabase as any).from("orders").insert(productionInsert).select().single();
+
+    if (orderResult.error && isMissingColumnError(orderResult.error)) {
+      supportsProductionOps = false;
+      console.warn("[orders POST] production columns missing; falling back to legacy order insert. Apply supabase/migrations/0002_production_ops.sql for full operations.");
+      orderResult = await (supabase as any)
+        .from("orders")
+        .insert({
+          order_number: orderNumber,
+          customer_id: customerId,
+          order_type,
+          delivery_method,
+          pickup_date,
+          pickup_time: pickup_time ?? null,
+          customer_message: combinedMessage || null,
+          simulator_session_id: simulator_session_id ?? null,
+          total_price: priceQuote.total,
+          deposit_amount: priceQuote.total,
+          status: "pending",
+          payment_status: "unpaid",
+        })
+        .select()
+        .single();
+    }
+
+    const { data: order, error: orderErr } = orderResult;
     if (orderErr || !order) throw orderErr;
 
-    // 케이크 디자인 주문 아이템 추가
     if (design_id) {
       const { data: design } = await supabase
         .from("cake_designs")
-        .select("price_from")
+        .select("price_from, order_count")
         .eq("id", design_id)
         .single();
 
-      await supabase.from("order_items").insert({
+      const itemPayload = {
         order_id: order.id,
         product_type: "cake",
         cake_design_id: design_id,
         quantity: 1,
-        unit_price: design?.price_from ?? 0,
-      });
+        unit_price: priceQuote.total || design?.price_from || 0,
+        ...(supportsProductionOps ? { options_json: details as Record<string, unknown> } : {}),
+      };
+      await (supabase as any).from("order_items").insert(itemPayload);
 
-      // 주문 수 증가
       await supabase
         .from("cake_designs")
-        .update({ order_count: (design?.price_from ? 1 : 1) })
+        .update({ order_count: (design?.order_count ?? 0) + 1 })
         .eq("id", design_id);
     }
 
+    if (supportsProductionOps) {
+      await recordOrderStatusEvent(supabase, {
+        orderId: order.id,
+        actorType: "customer",
+        nextStatus: "pending",
+        nextPaymentStatus: "unpaid",
+        note: requestedConsultation ? "상담 필요 주문서 접수" : "결제 가능 주문서 접수",
+      });
+    }
+
+    let paymentPayload: { payment_id: string; store_id: string; channel_key: string; order_name: string; amount: number } | null = null;
+    if (supportsProductionOps && !requestedConsultation && paymentMethod === "card") {
+      const paymentId = buildPaymentId(orderNumber);
+      const portoneConfig = getPublicPortOneConfig();
+      const paymentInsert = await (supabase as any).from("payments").insert({
+        order_id: order.id,
+        amount: priceQuote.total,
+        method: "CARD",
+        payment_id: paymentId,
+        channel_key: portoneConfig.channelKey || null,
+        status: "pending",
+      });
+      if (!paymentInsert.error) {
+        paymentPayload = {
+          payment_id: paymentId,
+          store_id: portoneConfig.storeId,
+          channel_key: portoneConfig.channelKey,
+          order_name: `${getProduct(details.product_key).title} ${orderNumber}`,
+          amount: priceQuote.total,
+        };
+      }
+    }
+
+    await sendOperationalNotification(supabase, {
+      orderId: order.id,
+      customerId,
+      phone: normalizedPhone,
+      name: customer_name,
+      templateKey: supportsProductionOps && requestedConsultation ? "quote_needed" : "order_received",
+      variables: {
+        고객명: customer_name,
+        주문번호: orderNumber,
+        픽업일: pickup_date,
+        픽업시간: pickup_time ?? "",
+      },
+    });
+
+    const effectiveRequiresConsultation = requestedConsultation || !supportsProductionOps || !paymentPayload;
     return NextResponse.json(
-      { ok: true, order_id: order.id, order_number: orderNumber },
+      {
+        ok: true,
+        order_id: order.id,
+        order_number: orderNumber,
+        requires_consultation: effectiveRequiresConsultation,
+        quote_status: supportsProductionOps ? getInitialQuoteStatus(effectiveRequiresConsultation) : "legacy_schema",
+        payment_required: Boolean(paymentPayload),
+        payment: paymentPayload,
+        production_schema_ready: supportsProductionOps,
+      },
       { status: 201 }
     );
   } catch (err) {
@@ -236,8 +318,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createServiceClient();
+  const normalizePhone = (value: string) => {
+    const digits = String(value).replace(/[^0-9]/g, "");
+    return digits.length === 11 ? `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}` : value;
+  };
 
-  let query = supabase
+  let query = (supabase as any)
     .from("orders")
     .select("*, customers(name, phone), order_items(*, cake_designs(title, thumbnail_url))")
     .order("created_at", { ascending: false });
@@ -245,11 +331,7 @@ export async function GET(request: Request) {
   if (orderNumber) {
     query = query.eq("order_number", orderNumber);
   } else if (phone) {
-    // 전화번호 정규화 후 조회
-    const digits = String(phone).replace(/[^0-9]/g, "");
-    const normalizedPhone = digits.length === 11
-      ? `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
-      : phone;
+    const normalizedPhone = normalizePhone(phone);
 
     const { data: customer } = await supabase
       .from("customers")
@@ -265,5 +347,11 @@ export async function GET(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ orders: data ?? [] });
+  let orders = data ?? [];
+  if (phone && orderNumber) {
+    const normalizedPhone = normalizePhone(phone);
+    orders = orders.filter((order: { customers?: { phone?: string } | null }) => order.customers?.phone === normalizedPhone);
+  }
+
+  return NextResponse.json({ orders });
 }

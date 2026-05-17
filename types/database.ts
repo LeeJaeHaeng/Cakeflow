@@ -668,6 +668,9 @@ export type OrderType = Database["public"]["Enums"]["order_type"]
 export type OrderStatus = Database["public"]["Enums"]["order_status"]
 export type DeliveryMethod = Database["public"]["Enums"]["delivery_method"]
 export type PaymentStatus = Database["public"]["Enums"]["payment_status"]
+export type QuoteStatus = "not_required" | "pending_quote" | "quoted" | "accepted" | "expired"
+export type NotificationChannel = "alimtalk" | "sms"
+export type NotificationStatus = "pending" | "sent" | "failed" | "fallback_sent"
 
 export type CakeDesign = Database["public"]["Tables"]["cake_designs"]["Row"]
 export type DesignImage = Database["public"]["Tables"]["design_images"]["Row"]
@@ -680,6 +683,20 @@ export type Payment = Database["public"]["Tables"]["payments"]["Row"]
 export type Review = Database["public"]["Tables"]["reviews"]["Row"]
 export type ShopCapacity = Database["public"]["Tables"]["shop_capacity"]["Row"]
 export type OtpRequest = Database["public"]["Tables"]["otp_requests"]["Row"]
+
+export interface PortOnePaymentRecord {
+  id: string
+  order_id: string
+  payment_id: string
+  portone_transaction_id: string | null
+  channel_key: string | null
+  method: string
+  amount: number
+  status: string
+  raw_payload: Json
+  paid_at: string | null
+  created_at: string
+}
 
 export interface SimulatorSummary {
   fonts: string[]

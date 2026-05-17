@@ -3,52 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, Save, CheckCircle2, Clock, Package, MessageSquare } from "lucide-react";
-
-const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
-const DAY_LABELS: Record<string, string> = {
-  mon: "월", tue: "화", wed: "수", thu: "목",
-  fri: "금", sat: "토", sun: "일",
-};
-
-type DayHour = { open: string; close: string; closed: boolean };
-type OperatingHours = Record<string, DayHour>;
-
-interface Settings {
-  operating_hours: OperatingHours;
-  daily_capacity: { max_orders: number };
-  pickup_slots: { slots: string[] };
-  sms_messages: Record<string, string>;
-  shop_info: {
-    name: string; phone: string; address: string;
-    kakao_url: string; instagram_url: string;
-  };
-}
-
-const DEFAULT_SETTINGS: Settings = {
-  operating_hours: {
-    mon: { open: "10:00", close: "19:00", closed: false },
-    tue: { open: "10:00", close: "19:00", closed: false },
-    wed: { open: "10:00", close: "19:00", closed: false },
-    thu: { open: "10:00", close: "19:00", closed: false },
-    fri: { open: "10:00", close: "19:00", closed: false },
-    sat: { open: "10:00", close: "18:00", closed: false },
-    sun: { open: "00:00", close: "00:00", closed: true },
-  },
-  daily_capacity: { max_orders: 8 },
-  pickup_slots: { slots: ["10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00"] },
-  sms_messages: {
-    confirmed: "[앙금앤케이크] 주문이 확정되었습니다. 픽업일에 방문해 주세요.",
-    producing: "[앙금앤케이크] 케이크 제작을 시작했습니다.",
-    ready: "[앙금앤케이크] 케이크 준비가 완료되었습니다! 오늘 방문해 주세요.",
-    cancelled: "[앙금앤케이크] 주문이 취소되었습니다. 문의: 031-000-0000",
-  },
-  shop_info: {
-    name: "앙금앤케이크", phone: "031-000-0000",
-    address: "경기 수원시 팔달구 정자천로14번길 40",
-    kakao_url: "https://pf.kakao.com/_hXAiK",
-    instagram_url: "https://instagram.com/anggeumandcake",
-  },
-};
+import { DAY_KEYS, DAY_LABELS, DEFAULT_SETTINGS, mergeShopSettings, type DayHour, type ShopSettings } from "@/lib/shop-settings";
 
 function Section({ title, icon: Icon, children }: {
   title: string; icon: React.ComponentType<{ size?: number; className?: string }>; children: React.ReactNode;
@@ -71,7 +26,7 @@ function Section({ title, icon: Icon, children }: {
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<ShopSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -81,7 +36,7 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d && typeof d === "object" && !d.error) {
-          setSettings({ ...DEFAULT_SETTINGS, ...d });
+          setSettings(mergeShopSettings(d));
         }
       })
       .finally(() => setLoading(false));
@@ -113,6 +68,13 @@ export default function SettingsPage() {
     setSettings((prev) => ({
       ...prev,
       sms_messages: { ...prev.sms_messages, [key]: value },
+    }));
+  };
+
+  const setShopInfo = (key: keyof ShopSettings["shop_info"], value: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      shop_info: { ...prev.shop_info, [key]: value },
     }));
   };
 
@@ -203,6 +165,30 @@ export default function SettingsPage() {
             <span className="text-sm text-muted-foreground">개 / 일</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">캘린더의 &quot;용량&quot; 표시에 사용됩니다</p>
+        </div>
+      </Section>
+
+      {/* 매장 정보 */}
+      <Section title="매장 정보" icon={Package}>
+        <div className="grid gap-3">
+          {[
+            { key: "name", label: "매장명", placeholder: "앙금앤케이크" },
+            { key: "address", label: "주소", placeholder: "매장 주소" },
+            { key: "phone", label: "전화번호", placeholder: "031-000-0000" },
+            { key: "kakao_url", label: "카카오톡 URL", placeholder: "https://pf.kakao.com/..." },
+            { key: "instagram_url", label: "인스타그램 URL", placeholder: "https://instagram.com/..." },
+          ].map(({ key, label, placeholder }) => (
+            <label key={key} className="block">
+              <span className="text-xs text-muted-foreground font-medium block mb-1">{label}</span>
+              <input
+                type="text"
+                value={settings.shop_info[key as keyof ShopSettings["shop_info"]] ?? ""}
+                onChange={(e) => setShopInfo(key as keyof ShopSettings["shop_info"], e.target.value)}
+                placeholder={placeholder}
+                className="w-full bg-muted rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </label>
+          ))}
         </div>
       </Section>
 

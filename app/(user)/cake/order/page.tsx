@@ -1,7 +1,10 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import * as PortOne from "@portone/browser-sdk/v2";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -781,13 +784,16 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
+  const [completionMode, setCompletionMode] = useState<"paid" | "consultation" | "bank">("consultation");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const customer = JSON.parse(sessionStorage.getItem("order_customer") ?? "{}");
   const pickup = JSON.parse(sessionStorage.getItem("order_pickup") ?? "{}");
   const requests = JSON.parse(sessionStorage.getItem("order_requests") ?? "{}") as CakeOrderDetails;
   const quote = calculatePrice(requests);
   const selectedProduct = getProduct(requests.product_key);
+  const requiresConsultation = !quote.exact || paymentMethod === "bank_transfer";
 
   const detailRows = [
     ["상품", selectedProduct.title],
@@ -810,8 +816,26 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
     ["기타 요청", requests.extra_request],
   ].filter(([, value]) => Boolean(value));
 
+  const clearOrderSession = () => {
+    sessionStorage.removeItem("order_customer");
+    sessionStorage.removeItem("order_pickup");
+    sessionStorage.removeItem("order_requests");
+  };
+
+  const completePayment = async (paymentId: string) => {
+    const completeRes = await fetch("/api/payments/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentId }),
+    });
+    const completeData = await completeRes.json();
+    if (!completeRes.ok) throw new Error(completeData.error ?? "결제 검증 실패");
+    return completeData;
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
+    setErrorMessage("");
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -825,7 +849,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           persons: pickup.persons,
           customer_message: requests.extra_request,
           allergy: requests.allergy,
-          cake_details: { ...requests, payment_method: paymentMethod },
+          cake_details: { ...requests, payment_method: requiresConsultation ? "bank_transfer" : paymentMethod },
           design_id: designId,
           simulator_session_id: simulatorSessionId,
           order_type: "cake",
@@ -834,36 +858,69 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
       setOrderNumber(data.order_number);
+
+      if (data.payment_required && data.payment) {
+        if (!data.payment.store_id || !data.payment.channel_key) {
+          throw new Error("PortOne 환경변수가 설정되지 않았습니다. 관리자에게 문의해주세요.");
+        }
+
+        const response = await PortOne.requestPayment({
+          storeId: data.payment.store_id,
+          channelKey: data.payment.channel_key,
+          paymentId: data.payment.payment_id,
+          orderName: data.payment.order_name,
+          totalAmount: data.payment.amount,
+          currency: "CURRENCY_KRW",
+          payMethod: "CARD",
+          customer: {
+            fullName: customer.name,
+            phoneNumber: String(customer.phone ?? "").replace(/[^0-9]/g, ""),
+          },
+          redirectUrl: `${window.location.origin}/payments/complete?order_number=${encodeURIComponent(data.order_number)}&paymentId=${encodeURIComponent(data.payment.payment_id)}`,
+        } as any);
+
+        if (response?.code) {
+          throw new Error(response.message ?? "결제가 취소되었거나 실패했습니다.");
+        }
+
+        await completePayment(data.payment.payment_id);
+        setCompletionMode("paid");
+      } else {
+        setCompletionMode(paymentMethod === "bank_transfer" ? "bank" : "consultation");
+      }
+
       setDone(true);
-
-      // 세션스토리지 정리
-      sessionStorage.removeItem("order_customer");
-      sessionStorage.removeItem("order_pickup");
-      sessionStorage.removeItem("order_requests");
-
-      setTimeout(() => router.push("/orders/track"), 3000);
+      clearOrderSession();
+      setTimeout(() => router.push(`/orders/track?order_number=${encodeURIComponent(data.order_number)}`), 2500);
     } catch (err) {
       console.error(err);
+      setErrorMessage(err instanceof Error ? err.message : "처리 중 오류가 발생했습니다.");
+    } finally {
       setSubmitting(false);
     }
   };
 
   if (done) {
+    const copy = completionMode === "paid"
+      ? "결제가 완료되었습니다. 사장님 확인 후 예약 확정 알림을 보내드립니다."
+      : completionMode === "bank"
+      ? "주문서가 접수되었습니다. 사장님이 확인 후 계좌이체 입금 안내를 보내드립니다."
+      : "상담 필요 항목이 있어 주문서만 먼저 접수되었습니다. 사장님이 카카오톡 또는 전화로 안내드립니다.";
+
     return (
       <div className="flex flex-col items-center py-12 gap-4">
         <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
           <CheckCircle2 size={40} className="text-green-600" />
         </div>
-        <h3 className="text-xl font-bold">주문 완료!</h3>
+        <h3 className="text-xl font-bold">주문 접수 완료</h3>
         <p className="text-muted-foreground text-sm text-center">
           주문번호 <strong className="text-foreground">{orderNumber}</strong>로<br />
           접수되었습니다. 잠시 후 주문 조회 페이지로 이동합니다.
         </p>
         <p className="rounded-2xl bg-primary/5 px-4 py-3 text-center text-xs leading-relaxed text-primary">
-          {paymentMethod === "card"
-            ? "카드결제 링크 확인 후 100% 선입금이 완료되면 예약이 확정됩니다."
-            : "계좌이체 입금 안내 확인 후 100% 선입금이 완료되면 예약이 확정됩니다."}
+          {copy}
         </p>
       </div>
     );
@@ -925,48 +982,53 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           ))}
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-          <span className="text-sm font-semibold">선입금 결제금액</span>
+          <span className="text-sm font-semibold">현재 확정 가능 금액</span>
           <span className="text-xl font-bold text-primary">{formatWon(quote.total)}</span>
         </div>
         {!quote.exact && (
           <p className="text-xs text-amber-700">
-            위 금액은 현재 확정 가능한 금액입니다. 상담 필요 항목은 사장님 확인 후 최종 결제금액에 반영됩니다.
+            상담 필요 항목이 있어 지금은 결제하지 않습니다. 주문서 접수 후 사장님이 최종 금액을 안내합니다.
           </p>
         )}
       </div>
 
       <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
-        <p className="text-sm font-semibold">결제 방식</p>
+        <p className="text-sm font-semibold">예약 진행 방식</p>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
+            disabled={!quote.exact}
             onClick={() => setPaymentMethod("card")}
-            className={`rounded-xl border px-3 py-3 text-sm font-medium ${
-              paymentMethod === "card" ? "border-primary bg-primary/10 text-primary" : "border-border"
+            className={`rounded-xl border px-3 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
+              paymentMethod === "card" && quote.exact ? "border-primary bg-primary/10 text-primary" : "border-border"
             }`}
             style={{ minHeight: "unset" }}
           >
-            카드결제
+            카드 100% 선결제
           </button>
           <button
             type="button"
             onClick={() => setPaymentMethod("bank_transfer")}
             className={`rounded-xl border px-3 py-3 text-sm font-medium ${
-              paymentMethod === "bank_transfer" ? "border-primary bg-primary/10 text-primary" : "border-border"
+              paymentMethod === "bank_transfer" || !quote.exact ? "border-primary bg-primary/10 text-primary" : "border-border"
             }`}
             style={{ minHeight: "unset" }}
           >
-            계좌이체
+            상담/계좌이체
           </button>
         </div>
       </div>
 
       <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl text-xs text-primary space-y-1">
-        <p className="font-medium flex items-center gap-1.5"><ShieldCheck size={13} /> 100% 선입금 안내</p>
-        <p>• 예약은 결제금액 100% 선입금 완료 후 확정됩니다.</p>
-        <p>• 카드결제 선택 시 주문 접수 후 카드 결제 링크로 결제가 진행됩니다.</p>
-        <p>• 계좌이체 선택 시 사장님 확인 후 입금 계좌를 안내드립니다.</p>
+        <p className="font-medium flex items-center gap-1.5"><ShieldCheck size={13} /> 실서비스 예약 안내</p>
+        <p>• 확정 금액 주문은 PortOne 카드결제 완료 후 예약 확인 단계로 이동합니다.</p>
+        <p>• 상담 필요 주문은 결제 없이 주문서만 발송하고 사장님 협의 후 계좌이체로 확정합니다.</p>
+        <p>• 진행 상황은 카카오 알림톡 또는 문자로 안내됩니다.</p>
       </div>
+
+      {errorMessage && (
+        <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p>
+      )}
 
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="flex-1 h-13 rounded-2xl border border-border text-sm font-medium" style={{ minHeight: "unset" }}>
@@ -979,7 +1041,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           style={{ minHeight: "unset" }}
         >
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-          {submitting ? "처리중..." : paymentMethod === "card" ? "카드결제 요청하기" : "주문 신청하기"}
+          {submitting ? "처리중..." : requiresConsultation ? "주문서만 접수하기" : "카드결제 진행하기"}
         </button>
       </div>
     </div>

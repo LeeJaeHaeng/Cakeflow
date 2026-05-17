@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { ShoppingBag, Phone, MessageCircle } from "lucide-react";
+import { DEFAULT_SETTINGS, mergeShopSettings, type ShopSettings } from "@/lib/shop-settings";
 
 interface DessertProduct {
   id: string;
@@ -14,9 +15,6 @@ interface DessertProduct {
   thumbnail_url: string | null;
   description: string | null;
 }
-
-const KAKAO_LINK = "https://open.kakao.com/o/example"; // 실제 카카오톡 오픈채팅 링크로 교체
-const PHONE_NUMBER = "031-000-0000"; // 실제 전화번호로 교체
 
 function SkeletonCard() {
   return (
@@ -81,7 +79,9 @@ function ProductCard({ product }: { product: DessertProduct }) {
 
 export default function DessertPage() {
   const [products, setProducts] = useState<DessertProduct[]>([]);
+  const [settings, setSettings] = useState<ShopSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const shopInfo = settings.shop_info;
 
   useEffect(() => {
     fetch("/api/products")
@@ -89,6 +89,11 @@ export default function DessertPage() {
       .then((d) => setProducts(d.products ?? []))
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => setSettings(mergeShopSettings(d)))
+      .catch(console.error);
   }, []);
 
   return (
@@ -108,7 +113,7 @@ export default function DessertPage() {
         </p>
         <div className="flex gap-2 mt-3">
           <a
-            href={KAKAO_LINK}
+            href={shopInfo.kakao_url}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#FEE500] text-[#3C1E1E] rounded-xl text-sm font-medium"
@@ -117,7 +122,7 @@ export default function DessertPage() {
             카카오 주문
           </a>
           <a
-            href={`tel:${PHONE_NUMBER}`}
+            href={`tel:${shopInfo.phone}`}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-muted text-foreground rounded-xl text-sm font-medium"
           >
             <Phone size={16} />
@@ -146,7 +151,7 @@ export default function DessertPage() {
       {products.length > 0 && (
         <div className="fixed bottom-20 md:bottom-4 left-0 right-0 px-4 flex justify-center">
           <a
-            href={KAKAO_LINK}
+            href={shopInfo.kakao_url}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-6 py-3.5 bg-[#FEE500] text-[#3C1E1E] rounded-2xl text-sm font-semibold shadow-lg hover:opacity-90 transition-opacity"

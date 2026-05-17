@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -19,6 +19,7 @@ import {
   MessageCircle,
   Sparkles,
 } from "lucide-react";
+import { DEFAULT_SETTINGS, mergeShopSettings, type ShopSettings } from "@/lib/shop-settings";
 
 function InstagramIcon({ size = 13 }: { size?: number }) {
   return (
@@ -44,6 +45,27 @@ const POPULAR_DESSERTS = [
   { id: "4", title: "초코 브라우니 박스", sub: "4개입", price: 18000, img: "https://images.unsplash.com/photo-1623659945030-050946cf64ef?w=300&h=300&fit=crop", stock: 0 },
 ];
 
+type HomeCakeDesign = {
+  id: string;
+  title: string;
+  categories?: string[];
+  price_from?: number;
+  order_count?: number;
+  simulator_enabled?: boolean;
+  thumbnail_url?: string | null;
+  design_images?: { url: string; sort_order?: number | null }[];
+};
+
+type HomeDessertProduct = {
+  id: string;
+  title: string;
+  category?: string | null;
+  description?: string | null;
+  price: number;
+  stock_count: number;
+  thumbnail_url?: string | null;
+};
+
 const REVIEWS = [
   { name: "김지영", date: "2주 전", rating: 5, text: "생일 케이크 너무 예뻤어요! 시뮬레이터로 미리 만들어보니까 실제랑 똑같이 나와서 깜짝 놀랐어요 🎂", tag: "생일" },
   { name: "이수민", date: "1개월 전", rating: 5, text: "앙금플라워가 너무 섬세하고 아름다워요. 선물했더니 받은 분이 감동받으셨답니다 ✨", tag: "선물" },
@@ -52,6 +74,52 @@ const REVIEWS = [
 
 export default function CustomerHomePage() {
   const [liked, setLiked] = useState<Set<string>>(new Set());
+  const [settings, setSettings] = useState<ShopSettings>(DEFAULT_SETTINGS);
+  const [featuredDesigns, setFeaturedDesigns] = useState(FEATURED_DESIGNS);
+  const [popularDesserts, setPopularDesserts] = useState(POPULAR_DESSERTS);
+  const shopInfo = settings.shop_info;
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => setSettings(mergeShopSettings(d)))
+      .catch(console.error);
+
+    fetch("/api/designs")
+      .then((r) => r.json())
+      .then((d) => {
+        const items = (d.items ?? []) as HomeCakeDesign[];
+        if (items.length === 0) return;
+        setFeaturedDesigns(items.slice(0, 4).map((design) => ({
+          id: design.id,
+          title: design.title,
+          category: design.categories?.[0] ?? "케이크",
+          tag: design.categories?.[1] ?? design.categories?.[0] ?? "추천",
+          price: design.price_from ?? 0,
+          rating: 4.9,
+          reviews: design.order_count ?? 0,
+          img: design.thumbnail_url ?? design.design_images?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]?.url ?? FEATURED_DESIGNS[0].img,
+          simulable: Boolean(design.simulator_enabled),
+        })));
+      })
+      .catch(console.error);
+
+    fetch("/api/products")
+      .then((r) => r.json())
+      .then((d) => {
+        const products = (d.products ?? []) as HomeDessertProduct[];
+        if (products.length === 0) return;
+        setPopularDesserts(products.slice(0, 4).map((product) => ({
+          id: product.id,
+          title: product.title,
+          sub: product.description ?? product.category ?? "디저트",
+          price: product.price,
+          stock: product.stock_count,
+          img: product.thumbnail_url ?? POPULAR_DESSERTS[0].img,
+        })));
+      })
+      .catch(console.error);
+  }, []);
 
   const toggleLike = (id: string) => {
     setLiked((prev) => {
@@ -156,7 +224,7 @@ export default function CustomerHomePage() {
           </Link>
         </div>
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-          {FEATURED_DESIGNS.map((design, i) => (
+          {featuredDesigns.map((design, i) => (
             <motion.div
               key={design.id}
               initial={{ opacity: 0, x: 20 }}
@@ -249,7 +317,7 @@ export default function CustomerHomePage() {
           </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {POPULAR_DESSERTS.map((d, i) => (
+          {popularDesserts.map((d, i) => (
             <motion.div
               key={d.id}
               initial={{ opacity: 0, y: 12 }}
@@ -337,14 +405,14 @@ export default function CustomerHomePage() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-4 left-4">
               <BrandLogo className="h-12 max-w-[210px] drop-shadow-md" />
-              <p className="text-white/70 text-xs">경기 수원시 팔달구</p>
+              <p className="text-white/70 text-xs">{shopInfo.address}</p>
             </div>
           </div>
           <div className="p-5">
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="flex items-start gap-2 text-xs text-muted-foreground">
                 <MapPin size={14} className="mt-0.5 flex-shrink-0 text-primary" />
-                <span>경기 수원시 팔달구<br />정자천로14번길 40</span>
+                <span>{shopInfo.address}</span>
               </div>
               <div className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Clock size={14} className="mt-0.5 flex-shrink-0 text-primary" />
@@ -352,13 +420,13 @@ export default function CustomerHomePage() {
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <a href="tel:031-000-0000" className="flex items-center gap-1.5 px-3 py-2 bg-muted rounded-xl text-xs font-medium text-foreground hover:bg-border transition-colors" style={{ minHeight: "unset" }}>
+              <a href={`tel:${shopInfo.phone}`} className="flex items-center gap-1.5 px-3 py-2 bg-muted rounded-xl text-xs font-medium text-foreground hover:bg-border transition-colors" style={{ minHeight: "unset" }}>
                 <Phone size={13} /> 전화 문의
               </a>
-              <a href="https://pf.kakao.com/_hXAiK" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-2 bg-[#FEE500] text-[#3A1D1D] rounded-xl text-xs font-medium hover:opacity-90 transition-opacity" style={{ minHeight: "unset" }}>
+              <a href={shopInfo.kakao_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-2 bg-[#FEE500] text-[#3A1D1D] rounded-xl text-xs font-medium hover:opacity-90 transition-opacity" style={{ minHeight: "unset" }}>
                 <MessageCircle size={13} /> 카카오 문의
               </a>
-              <a href="https://instagram.com/anggeumandcake" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl text-xs font-medium hover:opacity-90 transition-opacity" style={{ minHeight: "unset" }}>
+              <a href={shopInfo.instagram_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl text-xs font-medium hover:opacity-90 transition-opacity" style={{ minHeight: "unset" }}>
                 <InstagramIcon size={13} /> 인스타그램
               </a>
               <Link href="/store" className="flex items-center gap-1 px-3 py-2 border border-border rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted transition-colors ml-auto" style={{ minHeight: "unset" }}>

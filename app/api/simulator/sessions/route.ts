@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { design_id, state_json, preview_url } = body;
+    const { design_id, state_json, preview_url, production_url, summary, summary_json } = body;
 
     const supabase = await createServiceClient();
 
@@ -18,6 +18,8 @@ export async function POST(request: Request) {
         design_id: design_id ?? null,
         state_json: state_json ?? {},
         preview_url: preview_url ?? null,
+        production_url: production_url ?? preview_url ?? null,
+        summary: summary ?? summary_json ?? null,
         expires_at: expiresAt,
       })
       .select()
