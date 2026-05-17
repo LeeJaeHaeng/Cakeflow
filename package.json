@@ -13,8 +13,6 @@
     "@fontsource/pretendard": "^5.2.5",
     "@hookform/resolvers": "^5.2.2",
     "@imgly/background-removal": "^1.7.0",
-    "@portone/browser-sdk": "^0.1.6",
-    "@portone/server-sdk": "^0.19.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.3",
     "@tanstack/react-query": "^5.100.9",

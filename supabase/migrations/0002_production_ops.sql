@@ -173,7 +173,7 @@ INSERT INTO notification_templates (key, channel, aligo_template_code, subject, 
 VALUES
   ('order_received', 'alimtalk', NULL, '주문 접수', '[앙금앤케이크] #{고객명}님 주문서가 접수되었습니다. 주문번호: #{주문번호}'),
   ('quote_needed', 'alimtalk', NULL, '상담 필요 주문 접수', '[앙금앤케이크] 주문서가 접수되었습니다. 사장님 확인 후 카카오톡 또는 전화로 안내드릴게요. 주문번호: #{주문번호}'),
-  ('payment_paid', 'alimtalk', NULL, '결제 완료', '[앙금앤케이크] 결제가 완료되어 예약 확인 대기 중입니다. 주문번호: #{주문번호}'),
+  ('payment_paid', 'alimtalk', NULL, '입금 확인', '[앙금앤케이크] 입금이 확인되어 예약 확인 대기 중입니다. 주문번호: #{주문번호}'),
   ('confirmed', 'alimtalk', NULL, '예약 확정', '[앙금앤케이크] 예약이 확정되었습니다. 픽업일: #{픽업일} #{픽업시간}'),
   ('producing', 'alimtalk', NULL, '제작 시작', '[앙금앤케이크] 케이크 제작을 시작했습니다.'),
   ('ready', 'alimtalk', NULL, '픽업 준비 완료', '[앙금앤케이크] 케이크 준비가 완료되었습니다. 예약 시간에 방문해 주세요.'),

@@ -684,7 +684,7 @@ export type Review = Database["public"]["Tables"]["reviews"]["Row"]
 export type ShopCapacity = Database["public"]["Tables"]["shop_capacity"]["Row"]
 export type OtpRequest = Database["public"]["Tables"]["otp_requests"]["Row"]
 
-export interface PortOnePaymentRecord {
+export interface PaymentRecord {
   id: string
   order_id: string
   payment_id: string

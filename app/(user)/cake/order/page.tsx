@@ -1,10 +1,7 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import * as PortOne from "@portone/browser-sdk/v2";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -32,7 +29,6 @@ import {
   getProduct,
   getProductVariant,
   type CakeOrderDetails,
-  type PaymentMethod,
   type ProductKey,
 } from "@/lib/orders/pricing";
 
@@ -76,6 +72,8 @@ function OptionButton({
 }
 
 // ── Step 1: 고객 정보 + OTP ────────────────────────────────────────────────
+const PHONE_AUTH_DISABLED = process.env.NEXT_PUBLIC_PHONE_AUTH_DISABLED === "true";
+
 function StepCustomer({ onNext }: StepProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -88,6 +86,21 @@ function StepCustomer({ onNext }: StepProps) {
   const [mockCode, setMockCode] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState("");
+
+  const saveCustomerAndContinue = () => {
+    const digits = phone.replace(/[^0-9]/g, "");
+    if (!name.trim()) return setError("이름을 입력해주세요.");
+    if (digits.length !== 11 || !digits.startsWith("010")) {
+      return setError("010으로 시작하는 11자리 번호를 입력해주세요.");
+    }
+
+    const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    sessionStorage.setItem(
+      "order_customer",
+      JSON.stringify({ name: name.trim(), phone: formatted, token: PHONE_AUTH_DISABLED ? "phone-auth-disabled" : "" })
+    );
+    onNext();
+  };
 
   const sendOtp = async () => {
     const digits = phone.replace(/[^0-9]/g, "");
@@ -141,7 +154,7 @@ function StepCustomer({ onNext }: StepProps) {
       setVerified(true);
       const digits = phone.replace(/[^0-9]/g, "");
       const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
-      sessionStorage.setItem("order_customer", JSON.stringify({ name, phone: formatted, token: data.token }));
+      sessionStorage.setItem("order_customer", JSON.stringify({ name: name.trim(), phone: formatted, token: data.token }));
     } catch {
       setError("인증에 실패했습니다.");
     } finally {
@@ -180,18 +193,23 @@ function StepCustomer({ onNext }: StepProps) {
               className="w-full h-12 pl-10 pr-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
             />
           </div>
-          <button
-            onClick={sendOtp}
-            disabled={sending || cooldown > 0 || verified}
-            className="h-12 px-4 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium flex-shrink-0 disabled:opacity-50 transition-opacity"
-            style={{ minHeight: "unset" }}
-          >
-            {sending ? <Loader2 size={16} className="animate-spin" /> : cooldown > 0 ? `${cooldown}초` : otpSent ? "재발송" : "인증번호"}
-          </button>
+          {!PHONE_AUTH_DISABLED && (
+            <button
+              onClick={sendOtp}
+              disabled={sending || cooldown > 0 || verified}
+              className="h-12 px-4 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium flex-shrink-0 disabled:opacity-50 transition-opacity"
+              style={{ minHeight: "unset" }}
+            >
+              {sending ? <Loader2 size={16} className="animate-spin" /> : cooldown > 0 ? `${cooldown}초` : otpSent ? "재발송" : "인증번호"}
+            </button>
+          )}
         </div>
+        {PHONE_AUTH_DISABLED && (
+          <p className="mt-1.5 text-xs text-muted-foreground">현재 휴대폰 인증은 임시 비활성화 상태입니다.</p>
+        )}
       </div>
 
-      {otpSent && (
+      {!PHONE_AUTH_DISABLED && otpSent && (
         <div>
           {mockCode && (
             <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl mb-2 text-xs text-amber-700">
@@ -230,8 +248,8 @@ function StepCustomer({ onNext }: StepProps) {
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <button
-        onClick={onNext}
-        disabled={!verified || !name.trim()}
+        onClick={PHONE_AUTH_DISABLED ? saveCustomerAndContinue : onNext}
+        disabled={PHONE_AUTH_DISABLED ? !name.trim() || phone.replace(/[^0-9]/g, "").length !== 11 : !verified || !name.trim()}
         className="w-full h-13 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm disabled:opacity-40 flex items-center justify-center gap-2 mt-2"
         style={{ minHeight: "unset" }}
       >
@@ -735,7 +753,7 @@ function StepRequests({
       <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold">예상 결제금액</p>
+            <p className="text-sm font-semibold">예상 주문금액</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {quote.exact ? "선택 항목 기준 확정 금액입니다." : "확정 금액 + 상담 필요 항목이 있습니다."}
             </p>
@@ -784,8 +802,6 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
-  const [completionMode, setCompletionMode] = useState<"paid" | "consultation" | "bank">("consultation");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [errorMessage, setErrorMessage] = useState("");
 
   const customer = JSON.parse(sessionStorage.getItem("order_customer") ?? "{}");
@@ -793,7 +809,6 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
   const requests = JSON.parse(sessionStorage.getItem("order_requests") ?? "{}") as CakeOrderDetails;
   const quote = calculatePrice(requests);
   const selectedProduct = getProduct(requests.product_key);
-  const requiresConsultation = !quote.exact || paymentMethod === "bank_transfer";
 
   const detailRows = [
     ["상품", selectedProduct.title],
@@ -822,17 +837,6 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
     sessionStorage.removeItem("order_requests");
   };
 
-  const completePayment = async (paymentId: string) => {
-    const completeRes = await fetch("/api/payments/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentId }),
-    });
-    const completeData = await completeRes.json();
-    if (!completeRes.ok) throw new Error(completeData.error ?? "결제 검증 실패");
-    return completeData;
-  };
-
   const handleSubmit = async () => {
     setSubmitting(true);
     setErrorMessage("");
@@ -849,7 +853,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           persons: pickup.persons,
           customer_message: requests.extra_request,
           allergy: requests.allergy,
-          cake_details: { ...requests, payment_method: requiresConsultation ? "bank_transfer" : paymentMethod },
+          cake_details: { ...requests, payment_method: "bank_transfer" },
           design_id: designId,
           simulator_session_id: simulatorSessionId,
           order_type: "cake",
@@ -860,37 +864,6 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
       if (!res.ok) throw new Error(data.error);
 
       setOrderNumber(data.order_number);
-
-      if (data.payment_required && data.payment) {
-        if (!data.payment.store_id || !data.payment.channel_key) {
-          throw new Error("PortOne 환경변수가 설정되지 않았습니다. 관리자에게 문의해주세요.");
-        }
-
-        const response = await PortOne.requestPayment({
-          storeId: data.payment.store_id,
-          channelKey: data.payment.channel_key,
-          paymentId: data.payment.payment_id,
-          orderName: data.payment.order_name,
-          totalAmount: data.payment.amount,
-          currency: "CURRENCY_KRW",
-          payMethod: "CARD",
-          customer: {
-            fullName: customer.name,
-            phoneNumber: String(customer.phone ?? "").replace(/[^0-9]/g, ""),
-          },
-          redirectUrl: `${window.location.origin}/payments/complete?order_number=${encodeURIComponent(data.order_number)}&paymentId=${encodeURIComponent(data.payment.payment_id)}`,
-        } as any);
-
-        if (response?.code) {
-          throw new Error(response.message ?? "결제가 취소되었거나 실패했습니다.");
-        }
-
-        await completePayment(data.payment.payment_id);
-        setCompletionMode("paid");
-      } else {
-        setCompletionMode(paymentMethod === "bank_transfer" ? "bank" : "consultation");
-      }
-
       setDone(true);
       clearOrderSession();
       setTimeout(() => router.push(`/orders/track?order_number=${encodeURIComponent(data.order_number)}`), 2500);
@@ -903,12 +876,6 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
   };
 
   if (done) {
-    const copy = completionMode === "paid"
-      ? "결제가 완료되었습니다. 사장님 확인 후 예약 확정 알림을 보내드립니다."
-      : completionMode === "bank"
-      ? "주문서가 접수되었습니다. 사장님이 확인 후 계좌이체 입금 안내를 보내드립니다."
-      : "상담 필요 항목이 있어 주문서만 먼저 접수되었습니다. 사장님이 카카오톡 또는 전화로 안내드립니다.";
-
     return (
       <div className="flex flex-col items-center py-12 gap-4">
         <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
@@ -920,7 +887,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           접수되었습니다. 잠시 후 주문 조회 페이지로 이동합니다.
         </p>
         <p className="rounded-2xl bg-primary/5 px-4 py-3 text-center text-xs leading-relaxed text-primary">
-          {copy}
+          사장님이 주문서를 확인한 뒤 계좌이체 입금 안내를 보내드립니다.
         </p>
       </div>
     );
@@ -985,44 +952,23 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           <span className="text-sm font-semibold">현재 확정 가능 금액</span>
           <span className="text-xl font-bold text-primary">{formatWon(quote.total)}</span>
         </div>
-        {!quote.exact && (
-          <p className="text-xs text-amber-700">
-            상담 필요 항목이 있어 지금은 결제하지 않습니다. 주문서 접수 후 사장님이 최종 금액을 안내합니다.
-          </p>
-        )}
+        <p className="text-xs text-amber-700">
+          온라인 결제 없이 주문서 접수 후 사장님 확인을 거쳐 계좌이체로 예약을 확정합니다.
+        </p>
       </div>
 
-      <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
-        <p className="text-sm font-semibold">예약 진행 방식</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            disabled={!quote.exact}
-            onClick={() => setPaymentMethod("card")}
-            className={`rounded-xl border px-3 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
-              paymentMethod === "card" && quote.exact ? "border-primary bg-primary/10 text-primary" : "border-border"
-            }`}
-            style={{ minHeight: "unset" }}
-          >
-            카드 100% 선결제
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentMethod("bank_transfer")}
-            className={`rounded-xl border px-3 py-3 text-sm font-medium ${
-              paymentMethod === "bank_transfer" || !quote.exact ? "border-primary bg-primary/10 text-primary" : "border-border"
-            }`}
-            style={{ minHeight: "unset" }}
-          >
-            상담/계좌이체
-          </button>
-        </div>
+      <div className="space-y-2 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+        <p className="text-sm font-semibold text-primary">예약 진행 방식</p>
+        <p className="text-sm leading-6 text-primary">
+          주문서 접수 후 매장에서 디자인, 픽업 일정, 최종 금액을 확인합니다.
+          이후 카카오톡 또는 문자로 계좌이체 안내를 보내드리고, 입금 확인 후 예약이 확정됩니다.
+        </p>
       </div>
 
       <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl text-xs text-primary space-y-1">
         <p className="font-medium flex items-center gap-1.5"><ShieldCheck size={13} /> 실서비스 예약 안내</p>
-        <p>• 확정 금액 주문은 PortOne 카드결제 완료 후 예약 확인 단계로 이동합니다.</p>
-        <p>• 상담 필요 주문은 결제 없이 주문서만 발송하고 사장님 협의 후 계좌이체로 확정합니다.</p>
+        <p>• 모든 주문은 결제 없이 주문서만 먼저 접수합니다.</p>
+        <p>• 사장님 협의 후 계좌이체 입금이 확인되면 예약이 확정됩니다.</p>
         <p>• 진행 상황은 카카오 알림톡 또는 문자로 안내됩니다.</p>
       </div>
 
@@ -1041,7 +987,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           style={{ minHeight: "unset" }}
         >
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-          {submitting ? "처리중..." : requiresConsultation ? "주문서만 접수하기" : "카드결제 진행하기"}
+          {submitting ? "처리중..." : "주문서 접수하기"}
         </button>
       </div>
     </div>

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
-import { cancelPortOnePayment } from "@/lib/payments/portone";
 
 export async function POST(
   request: Request,
@@ -22,13 +21,17 @@ export async function POST(
       .eq("id", id)
       .single();
 
-    if (error || !payment?.payment_id) return NextResponse.json({ error: "결제 정보를 찾을 수 없습니다." }, { status: 404 });
-
-    const payload = await cancelPortOnePayment(payment.payment_id, reason, amount ? Number(amount) : undefined);
+    if (error || !payment) return NextResponse.json({ error: "결제 정보를 찾을 수 없습니다." }, { status: 404 });
 
     await (supabase as any).from("payments").update({
       status: "refunded",
-      raw_payload: payload,
+      raw_payload: {
+        type: "manual_bank_transfer_refund",
+        reason,
+        amount: amount ? Number(amount) : null,
+        refunded_by: session.email,
+        refunded_at: new Date().toISOString(),
+      },
     }).eq("id", id);
 
     await (supabase as any).from("orders").update({

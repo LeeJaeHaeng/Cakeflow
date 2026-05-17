@@ -49,8 +49,8 @@ const DEFAULT_MESSAGES: Record<NotificationTemplateKey, { subject: string; body:
     body: "[앙금앤케이크] 주문서가 접수되었습니다. 사장님 확인 후 카카오톡 또는 전화로 안내드릴게요. 주문번호: #{주문번호}",
   },
   payment_paid: {
-    subject: "결제 완료",
-    body: "[앙금앤케이크] 결제가 완료되어 예약 확인 대기 중입니다. 주문번호: #{주문번호}",
+    subject: "입금 확인",
+    body: "[앙금앤케이크] 입금이 확인되어 예약 확인 대기 중입니다. 주문번호: #{주문번호}",
   },
   confirmed: {
     subject: "예약 확정",

@@ -119,7 +119,7 @@ function OrderCard({ order }: { order: Order }) {
           </div>
           <div className="rounded-xl bg-muted p-2">
             <p className="text-xs text-muted-foreground">예약방식</p>
-            <p className="font-semibold">{order.requires_consultation ? "상담 후 확정" : "온라인 결제"}</p>
+            <p className="font-semibold">계좌이체 확정</p>
           </div>
         </div>
 

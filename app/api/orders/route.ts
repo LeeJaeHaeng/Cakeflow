@@ -4,10 +4,11 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
 import { calculatePrice, formatWon, getProduct, type CakeOrderDetails, type ProductKey } from "@/lib/orders/pricing";
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
-import { buildPaymentId, getInitialQuoteStatus, recordOrderStatusEvent, shouldRequireConsultation } from "@/lib/orders/status";
-import { getPublicPortOneConfig } from "@/lib/payments/portone";
+import { getInitialQuoteStatus, recordOrderStatusEvent } from "@/lib/orders/status";
 import { verifyCustomerSession } from "@/lib/auth/customer";
 import { normalizeKoreanMobile } from "@/lib/phone";
+
+const PHONE_AUTH_DISABLED = process.env.NEXT_PUBLIC_PHONE_AUTH_DISABLED === "true";
 
 export async function POST(request: Request) {
   try {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
       if (!details || typeof details !== "object") return "";
       const quote = calculatePrice(details as CakeOrderDetails);
       const product = getProduct((details as CakeOrderDetails).product_key);
-      const paymentMethod = details.payment_method === "bank_transfer" ? "계좌이체" : "카드결제";
+      const paymentMethod = "계좌이체";
 
       const rows: Array<[string, unknown]> = [
         ["상품", product.title],
@@ -66,9 +67,9 @@ export async function POST(request: Request) {
         ["기본금액", formatWon(quote.basePrice)],
         ["확정 추가금", quote.addOns.length > 0 ? quote.addOns.map((item) => `${item.label} +${formatWon(item.amount)}`).join(", ") : ""],
         ["상담 필요 추가금", quote.unknownItems.join(", ")],
-        ["선입금 결제금액", `${formatWon(quote.total)}${quote.exact ? "" : " + 상담 후 추가금"}`],
+        ["예상 주문금액", `${formatWon(quote.total)}${quote.exact ? "" : " + 상담 후 추가금"}`],
         ["결제 방식", paymentMethod],
-        ["예약 안내", quote.exact && details.payment_method === "card" ? "카드 결제 완료 후 예약 확정" : "사장님 확인 후 카카오톡/전화 상담 및 계좌이체 입금으로 예약 확정"],
+        ["예약 안내", "사장님 확인 후 카카오톡/전화 상담 및 계좌이체 입금으로 예약 확정"],
       ];
 
       return rows
@@ -118,10 +119,12 @@ export async function POST(request: Request) {
     if (!normalizedPhone) {
       return NextResponse.json({ error: "올바른 휴대폰 번호가 아닙니다." }, { status: 400 });
     }
-    try {
-      await verifyCustomerSession(customer_token, normalizedPhone);
-    } catch {
-      return NextResponse.json({ error: "휴대폰 인증 후 주문할 수 있습니다." }, { status: 401 });
+    if (!PHONE_AUTH_DISABLED) {
+      try {
+        await verifyCustomerSession(customer_token, normalizedPhone);
+      } catch {
+        return NextResponse.json({ error: "휴대폰 인증 후 주문할 수 있습니다." }, { status: 401 });
+      }
     }
 
     const supabase = await createServiceClient();
@@ -155,9 +158,7 @@ export async function POST(request: Request) {
     const orderNumber = `CF${today}${nanoid(4).toUpperCase()}`;
     const details = (cake_details ?? {}) as CakeOrderDetails;
     const priceQuote = calculatePrice(details);
-    const paymentMethod = details.payment_method ?? "card";
-    const requestedConsultation = shouldRequireConsultation(priceQuote.exact, paymentMethod);
-    const paymentDueAt = !requestedConsultation ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
+    const requestedConsultation = true;
 
     let simulatorDetails = "";
     if (simulator_session_id) {
@@ -187,9 +188,9 @@ export async function POST(request: Request) {
       customer_message: combinedMessage || null,
       simulator_session_id: simulator_session_id ?? null,
       total_price: priceQuote.total,
-      deposit_amount: requestedConsultation ? 0 : priceQuote.total,
-      confirmed_price: requestedConsultation ? null : priceQuote.total,
-      payment_due_at: paymentDueAt,
+      deposit_amount: 0,
+      confirmed_price: null,
+      payment_due_at: null,
       quote_status: getInitialQuoteStatus(requestedConsultation),
       requires_consultation: requestedConsultation,
       source_channel,
@@ -255,31 +256,8 @@ export async function POST(request: Request) {
         actorType: "customer",
         nextStatus: "pending",
         nextPaymentStatus: "unpaid",
-        note: requestedConsultation ? "상담 필요 주문서 접수" : "결제 가능 주문서 접수",
+        note: "계좌이체 안내 전 주문서 접수",
       });
-    }
-
-    let paymentPayload: { payment_id: string; store_id: string; channel_key: string; order_name: string; amount: number } | null = null;
-    if (supportsProductionOps && !requestedConsultation && paymentMethod === "card") {
-      const paymentId = buildPaymentId(orderNumber);
-      const portoneConfig = getPublicPortOneConfig();
-      const paymentInsert = await (supabase as any).from("payments").insert({
-        order_id: order.id,
-        amount: priceQuote.total,
-        method: "CARD",
-        payment_id: paymentId,
-        channel_key: portoneConfig.channelKey || null,
-        status: "pending",
-      });
-      if (!paymentInsert.error) {
-        paymentPayload = {
-          payment_id: paymentId,
-          store_id: portoneConfig.storeId,
-          channel_key: portoneConfig.channelKey,
-          order_name: `${getProduct(details.product_key).title} ${orderNumber}`,
-          amount: priceQuote.total,
-        };
-      }
     }
 
     await sendOperationalNotification(supabase, {
@@ -287,7 +265,7 @@ export async function POST(request: Request) {
       customerId,
       phone: normalizedPhone,
       name: customer_name,
-      templateKey: supportsProductionOps && requestedConsultation ? "quote_needed" : "order_received",
+      templateKey: "quote_needed",
       variables: {
         고객명: customer_name,
         주문번호: orderNumber,
@@ -296,16 +274,15 @@ export async function POST(request: Request) {
       },
     });
 
-    const effectiveRequiresConsultation = requestedConsultation || !supportsProductionOps || !paymentPayload;
     return NextResponse.json(
       {
         ok: true,
         order_id: order.id,
         order_number: orderNumber,
-        requires_consultation: effectiveRequiresConsultation,
-        quote_status: supportsProductionOps ? getInitialQuoteStatus(effectiveRequiresConsultation) : "legacy_schema",
-        payment_required: Boolean(paymentPayload),
-        payment: paymentPayload,
+        requires_consultation: true,
+        quote_status: supportsProductionOps ? getInitialQuoteStatus(true) : "legacy_schema",
+        payment_required: false,
+        payment: null,
         production_schema_ready: supportsProductionOps,
       },
       { status: 201 }
