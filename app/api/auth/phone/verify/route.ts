@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyOtp } from "@/lib/auth/otp";
-import { SignJWT } from "jose";
-
-const SECRET = new TextEncoder().encode(
-  process.env.ADMIN_JWT_SECRET ?? "dev-secret-change-in-prod"
-);
+import { createCustomerSession } from "@/lib/auth/customer";
 
 export async function POST(request: Request) {
   try {
@@ -19,12 +15,7 @@ export async function POST(request: Request) {
 
     const { phone } = await verifyOtp(request_id, String(code));
 
-    // 고객용 15분 세션 토큰
-    const sessionToken = await new SignJWT({ phone, type: "customer" })
-      .setProtectedHeader({ alg: "HS256" })
-      .setExpirationTime("15m")
-      .setIssuedAt()
-      .sign(SECRET);
+    const sessionToken = await createCustomerSession(phone);
 
     return NextResponse.json({ token: sessionToken });
   } catch (err) {

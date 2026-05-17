@@ -45,7 +45,13 @@ export async function requestOtp(phone: string): Promise<OtpRequestResult> {
   }
 
   const message = `[앙금앤케이크] 인증번호: ${code} (3분 내 입력)`;
-  await sendSMS(phone, message);
+  try {
+    await sendSMS(phone, message);
+  } catch (err) {
+    await supabase.from("otp_requests").delete().eq("id", data.id);
+    console.error("[otp/request] SMS send failed", err);
+    throw new Error("OTP_SEND_FAILED");
+  }
 
   return {
     requestId: data.id,

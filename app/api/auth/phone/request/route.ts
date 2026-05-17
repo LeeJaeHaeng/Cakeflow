@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
 import { requestOtp } from "@/lib/auth/otp";
+import { normalizeKoreanMobile } from "@/lib/phone";
 
 export async function POST(request: Request) {
   try {
     const { phone: rawPhone } = await request.json();
 
-    // 숫자만 추출 후 010XXXXXXXX 형식으로 정규화
-    const digits = String(rawPhone ?? "").replace(/[^0-9]/g, "");
-    if (!/^010\d{8}$/.test(digits)) {
+    const phone = normalizeKoreanMobile(rawPhone);
+    if (!phone) {
       return NextResponse.json(
         { error: "올바른 휴대폰 번호를 입력해주세요. (010으로 시작하는 11자리)" },
         { status: 400 }
       );
     }
-    // 저장 형식: 010-XXXX-XXXX
-    const phone = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 
     const result = await requestOtp(phone);
 
@@ -30,6 +28,12 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "잠시 후 다시 시도해주세요. (60초 후 재발송)" },
         { status: 429 }
+      );
+    }
+    if (message === "OTP_SEND_FAILED") {
+      return NextResponse.json(
+        { error: "인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요." },
+        { status: 502 }
       );
     }
 

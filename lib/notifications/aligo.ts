@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Database } from "@/types/database";
+import { phoneDigits } from "@/lib/phone";
 
 const SMS_URL = "https://apis.aligo.in/send/";
 const ALIMTALK_URL = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
@@ -77,12 +78,44 @@ const DEFAULT_MESSAGES: Record<NotificationTemplateKey, { subject: string; body:
   },
 };
 
-function normalizePhone(phone: string) {
-  return phone.replace(/[^0-9]/g, "");
-}
-
 function interpolate(template: string, variables: NotificationInput["variables"] = {}) {
   return template.replace(/#\{([^}]+)\}/g, (_, key: string) => String(variables[key] ?? ""));
+}
+
+async function resolveTemplate(
+  supabase: SupabaseClient<Database>,
+  templateKey: NotificationTemplateKey
+) {
+  const defaults = DEFAULT_MESSAGES[templateKey];
+
+  try {
+    const { data } = await (supabase as any)
+      .from("notification_templates")
+      .select("aligo_template_code, subject, body, enabled")
+      .eq("key", templateKey)
+      .maybeSingle();
+
+    if (data?.enabled !== false) {
+      return {
+        subject: data?.subject || defaults.subject,
+        body: data?.body || defaults.body,
+        templateCode: data?.aligo_template_code || ENV_TEMPLATE_CODES[templateKey],
+      };
+    }
+  } catch (err) {
+    console.warn("[notification template fallback]", err);
+  }
+
+  return {
+    subject: defaults.subject,
+    body: defaults.body,
+    templateCode: ENV_TEMPLATE_CODES[templateKey],
+  };
+}
+
+function assertAligoSmsEnv() {
+  const missing = ["ALIGO_API_KEY", "ALIGO_USER_ID", "ALIGO_SENDER"].filter((key) => !process.env[key]);
+  if (missing.length > 0) throw new Error(`ALIGO_SMS_ENV_MISSING:${missing.join(",")}`);
 }
 
 async function logNotification(
@@ -127,17 +160,19 @@ async function sendSMSRaw(phone: string, message: string) {
     return { mock: true };
   }
 
+  assertAligoSmsEnv();
+
   const body = new URLSearchParams({
     key: process.env.ALIGO_API_KEY!,
     user_id: process.env.ALIGO_USER_ID!,
     sender: process.env.ALIGO_SENDER!,
-    receiver: normalizePhone(phone),
+    receiver: phoneDigits(phone),
     msg: message,
     msg_type: message.length > 45 ? "LMS" : "SMS",
   });
 
   const res = await fetch(SMS_URL, { method: "POST", body });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (String(data.result_code) !== "1") throw new Error(data.message ?? "SMS_SEND_FAILED");
   return data;
 }
@@ -150,6 +185,7 @@ async function sendAlimtalkRaw(phone: string, name: string | undefined, subject:
 
   const senderKey = process.env.ALIGO_KAKAO_SENDER_KEY;
   if (!senderKey) throw new Error("ALIGO_KAKAO_SENDER_KEY_MISSING");
+  assertAligoSmsEnv();
 
   const body = new URLSearchParams({
     apikey: process.env.ALIGO_API_KEY!,
@@ -157,14 +193,14 @@ async function sendAlimtalkRaw(phone: string, name: string | undefined, subject:
     senderkey: senderKey,
     tpl_code: templateCode,
     sender: process.env.ALIGO_SENDER!,
-    receiver_1: normalizePhone(phone),
+    receiver_1: phoneDigits(phone),
     recvname_1: name ?? "",
     subject_1: subject,
     message_1: message,
   });
 
   const res = await fetch(ALIMTALK_URL, { method: "POST", body });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   const code = String(data.code ?? data.result_code ?? "");
   if (code !== "0" && code !== "1") throw new Error(data.message ?? "ALIMTALK_SEND_FAILED");
   return data;
@@ -185,10 +221,10 @@ export async function sendOperationalNotification(
     }
   };
 
-  const template = DEFAULT_MESSAGES[input.templateKey];
+  const template = await resolveTemplate(supabase, input.templateKey);
   const subject = template.subject;
   const message = interpolate(input.fallbackMessage ?? template.body, input.variables);
-  const templateCode = ENV_TEMPLATE_CODES[input.templateKey];
+  const templateCode = template.templateCode;
 
   if (templateCode) {
     try {

@@ -109,7 +109,7 @@ function StepCustomer({ onNext }: StepProps) {
       }
       setOtpSent(true);
       setRequestId(data.request_id);
-      if (data._mock_code) setMockCode(data._mock_code);
+      setMockCode(data._mock_code ?? null);
       setCooldown(60);
       const t = setInterval(() => setCooldown((c) => {
         if (c <= 1) { clearInterval(t); return 0; }

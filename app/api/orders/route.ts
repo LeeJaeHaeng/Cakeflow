@@ -6,6 +6,8 @@ import { calculatePrice, formatWon, getProduct, type CakeOrderDetails, type Prod
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
 import { buildPaymentId, getInitialQuoteStatus, recordOrderStatusEvent, shouldRequireConsultation } from "@/lib/orders/status";
 import { getPublicPortOneConfig } from "@/lib/payments/portone";
+import { verifyCustomerSession } from "@/lib/auth/customer";
+import { normalizeKoreanMobile } from "@/lib/phone";
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +15,7 @@ export async function POST(request: Request) {
     const {
       customer_name,
       customer_phone,
+      customer_token,
       pickup_date,
       pickup_time,
       customer_message,
@@ -111,10 +114,15 @@ export async function POST(request: Request) {
         .join("\n");
     };
 
-    const phoneDigits = String(customer_phone).replace(/[^0-9]/g, "");
-    const normalizedPhone = phoneDigits.length === 11
-      ? `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 7)}-${phoneDigits.slice(7)}`
-      : customer_phone;
+    const normalizedPhone = normalizeKoreanMobile(customer_phone);
+    if (!normalizedPhone) {
+      return NextResponse.json({ error: "올바른 휴대폰 번호가 아닙니다." }, { status: 400 });
+    }
+    try {
+      await verifyCustomerSession(customer_token, normalizedPhone);
+    } catch {
+      return NextResponse.json({ error: "휴대폰 인증 후 주문할 수 있습니다." }, { status: 401 });
+    }
 
     const supabase = await createServiceClient();
 
@@ -318,11 +326,6 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createServiceClient();
-  const normalizePhone = (value: string) => {
-    const digits = String(value).replace(/[^0-9]/g, "");
-    return digits.length === 11 ? `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}` : value;
-  };
-
   let query = (supabase as any)
     .from("orders")
     .select("*, customers(name, phone), order_items(*, cake_designs(title, thumbnail_url))")
@@ -331,7 +334,8 @@ export async function GET(request: Request) {
   if (orderNumber) {
     query = query.eq("order_number", orderNumber);
   } else if (phone) {
-    const normalizedPhone = normalizePhone(phone);
+    const normalizedPhone = normalizeKoreanMobile(phone);
+    if (!normalizedPhone) return NextResponse.json({ orders: [] });
 
     const { data: customer } = await supabase
       .from("customers")
@@ -349,7 +353,7 @@ export async function GET(request: Request) {
 
   let orders = data ?? [];
   if (phone && orderNumber) {
-    const normalizedPhone = normalizePhone(phone);
+    const normalizedPhone = normalizeKoreanMobile(phone);
     orders = orders.filter((order: { customers?: { phone?: string } | null }) => order.customers?.phone === normalizedPhone);
   }
 

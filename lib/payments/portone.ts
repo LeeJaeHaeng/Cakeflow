@@ -88,6 +88,7 @@ export async function syncPaidPaymentToOrder(paymentId: string, actorType: "cust
   }
 
   const order = localPayment.orders as any;
+  const alreadyPaid = localPayment.status === "paid" || order.payment_status === "paid";
   const expectedAmount = Number(order.confirmed_price ?? order.total_price);
   const paidAmount = getPaymentTotal(payment);
 
@@ -143,5 +144,5 @@ export async function syncPaidPaymentToOrder(paymentId: string, actorType: "cust
     note: "PortOne 결제 승인 동기화",
   });
 
-  return { order, payment, paidAmount };
+  return { order, payment, paidAmount, alreadyPaid };
 }

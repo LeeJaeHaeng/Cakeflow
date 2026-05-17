@@ -8,10 +8,10 @@ export async function POST(request: Request) {
     const { paymentId } = await request.json();
     if (!paymentId) return NextResponse.json({ error: "paymentId 필요" }, { status: 400 });
 
-    const { order, paidAmount } = await syncPaidPaymentToOrder(paymentId, "customer");
+    const { order, paidAmount, alreadyPaid } = await syncPaidPaymentToOrder(paymentId, "customer");
     const customer = order.customers as { id?: string; name?: string; phone?: string } | null;
 
-    if (customer?.phone) {
+    if (!alreadyPaid && customer?.phone) {
       const supabase = await createServiceClient();
       await sendOperationalNotification(supabase, {
         orderId: order.id,

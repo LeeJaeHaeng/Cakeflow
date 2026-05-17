@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { verifyAdminSession } from "@/lib/auth/admin";
 import { sendOperationalNotification, type NotificationTemplateKey } from "@/lib/notifications/aligo";
 
 export async function POST(request: Request) {
   try {
+    const session = await verifyAdminSession();
+    if (!session) return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+
     const body = await request.json() as {
       order_id?: string;
       customer_id?: string;
