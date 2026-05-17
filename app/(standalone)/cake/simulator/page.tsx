@@ -48,6 +48,7 @@ const SimulatorCanvas = dynamic(
 );
 
 const CANVAS_SIZE = 400;
+const MAX_PREVIEW_UPLOAD_BYTES = 4.5 * 1024 * 1024;
 
 const BG_COLORS = [
   "#FFFEFB", "#FFF5F5", "#FFF0F0", "#F5F0FF",
@@ -117,6 +118,31 @@ function ToolButton({
       )}
     </button>
   );
+}
+
+async function stageToPreviewBlob(stage: Konva.Stage) {
+  for (const pixelRatio of [2, 1.5, 1]) {
+    const dataURL = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
+    const blob = await fetch(dataURL).then((res) => res.blob());
+    if (blob.size <= MAX_PREVIEW_UPLOAD_BYTES || pixelRatio === 1) {
+      return { dataURL, blob };
+    }
+  }
+
+  throw new Error("시뮬레이터 미리보기 생성 실패");
+}
+
+function sanitizeSnapshotForSession<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((item) => sanitizeSnapshotForSession(item)) as T;
+  if (!value || typeof value !== "object") return value;
+
+  const output: Record<string, unknown> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
+    output[key] = typeof entry === "string" && entry.startsWith("data:image/")
+      ? "[inline-image-omitted]"
+      : sanitizeSnapshotForSession(entry);
+  });
+  return output as T;
 }
 
 function isProductKey(value: string | null): value is ProductKey {
@@ -492,9 +518,7 @@ function PageContent() {
       setSelected(null);
       await new Promise((r) => setTimeout(r, 100));
 
-      const dataURL = stage.toDataURL({ pixelRatio: 2, mimeType: "image/png" });
-      const res = await fetch(dataURL);
-      const blob = await res.blob();
+      const { dataURL, blob } = await stageToPreviewBlob(stage);
       const formData = new FormData();
       formData.append("file", blob, "simulator-preview.png");
       formData.append("bucket", "simulator-previews");
@@ -513,7 +537,7 @@ function PageContent() {
       }
 
       const { getSnapshot } = useSimulatorStore.getState();
-      const snapshot = getSnapshot();
+      const snapshot = sanitizeSnapshotForSession(getSnapshot());
       const sessionRes = await fetch("/api/simulator/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
