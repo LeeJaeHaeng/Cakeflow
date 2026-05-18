@@ -224,7 +224,7 @@ function OrderCard({
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-card border border-border text-foreground hover:bg-muted"
                 >
-                  상세 운영
+                  주문서 상세보기
                 </a>
               </div>
 

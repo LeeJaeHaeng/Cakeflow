@@ -17,6 +17,81 @@ function formatWon(value: number | null | undefined) {
   return `${Number(value ?? 0).toLocaleString("ko-KR")}원`;
 }
 
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  unpaid: "입금 전",
+  partial: "일부 입금",
+  paid: "입금 완료",
+  refunded: "환불 완료",
+};
+
+const QUOTE_STATUS_LABELS: Record<string, string> = {
+  not_required: "견적 불필요",
+  pending_quote: "견적 안내 필요",
+  quoted: "견적 안내 완료",
+  accepted: "고객 수락",
+  expired: "견적 만료",
+  legacy_schema: "이전 주문",
+};
+
+const ACTOR_LABELS: Record<string, string> = {
+  customer: "고객",
+  admin: "관리자",
+  system: "시스템",
+  webhook: "자동 처리",
+};
+
+const NOTIFICATION_TEMPLATE_LABELS: Record<string, string> = {
+  order_received: "주문 접수 안내",
+  payment_paid: "입금 확인 안내",
+  quote_needed: "상담 필요 안내",
+  confirmed: "예약 확정 안내",
+  producing: "제작 시작 안내",
+  ready: "픽업 준비 안내",
+  completed: "픽업 완료 안내",
+  cancelled: "주문 취소 안내",
+  review_request: "리뷰 요청",
+};
+
+const NOTIFICATION_STATUS_LABELS: Record<string, string> = {
+  sent: "발송 완료",
+  failed: "발송 실패",
+  fallback_sent: "문자 대체 발송",
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  alimtalk: "알림톡",
+  sms: "문자",
+};
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function parseOrderMessage(message: string | null | undefined) {
+  if (!message) return [];
+  return message
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const index = line.indexOf(":");
+      if (index < 0) return { label: "요청 내용", value: line };
+      return {
+        label: line.slice(0, index).trim(),
+        value: line.slice(index + 1).trim(),
+      };
+    })
+    .filter((item) => item.value && item.label !== "참고사진 URL");
+}
+
+function getCakeDetails(order: any) {
+  const details = order.cake_details;
+  return details && typeof details === "object" ? details : {};
+}
+
 async function getOrder(id: string) {
   const supabase = await createServiceClient();
   const { data: order } = await (supabase as any)
@@ -53,6 +128,11 @@ export default async function AdminOrderDetailPage({
   const events = ([...(order.order_status_events ?? [])] as any[]).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const notifications = ([...(order.notification_logs ?? [])] as any[]).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const statusLabel = STATUS_LABELS[order.status as keyof typeof STATUS_LABELS] ?? order.status;
+  const paymentLabel = PAYMENT_STATUS_LABELS[order.payment_status] ?? order.payment_status;
+  const quoteLabel = QUOTE_STATUS_LABELS[order.quote_status] ?? order.quote_status ?? "견적 불필요";
+  const orderFields = parseOrderMessage(order.customer_message);
+  const cakeDetails = getCakeDetails(order);
+  const referenceImageUrl = cakeDetails.reference_image_url || orderFields.find((item) => item.label === "참고사진 URL")?.value;
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 lg:p-6">
@@ -70,7 +150,7 @@ export default async function AdminOrderDetailPage({
           href={`/api/admin/orders/${order.id}/work-order`}
           className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
         >
-          작업지시서 다운로드
+          작업지시서 PDF 다운로드
         </a>
       </div>
 
@@ -82,13 +162,13 @@ export default async function AdminOrderDetailPage({
               <h2 className="mt-1 text-xl font-bold">{statusLabel}</h2>
             </div>
             <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-              {order.payment_status}
+              {paymentLabel}
             </span>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <Info label="결제/확정금액" value={formatWon(order.confirmed_price ?? order.total_price)} />
-            <Info label="견적 상태" value={order.quote_status ?? "not_required"} />
+            <Info label="견적 상태" value={quoteLabel} />
             <Info label="협의 필요" value={order.requires_consultation ? "필요" : "불필요"} />
           </div>
 
@@ -135,10 +215,30 @@ export default async function AdminOrderDetailPage({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-border bg-card p-5">
-          <h2 className="font-semibold">주문서 원문</h2>
-          <pre className="mt-3 max-h-[520px] overflow-auto whitespace-pre-wrap rounded-2xl bg-muted p-4 text-sm leading-relaxed">
-            {order.customer_message ?? "주문서 내용 없음"}
-          </pre>
+          <h2 className="font-semibold">주문서 상세 내용</h2>
+          {orderFields.length === 0 ? (
+            <p className="mt-3 rounded-2xl bg-muted p-4 text-sm text-muted-foreground">주문서 내용 없음</p>
+          ) : (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {orderFields.map((item) => (
+                <div key={`${item.label}-${item.value}`} className="rounded-2xl border border-border bg-background p-4">
+                  <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-relaxed">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {referenceImageUrl && (
+            <div className="mt-4">
+              <p className="text-sm font-semibold">고객 첨부 이미지</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={referenceImageUrl}
+                alt="고객 첨부 참고사진"
+                className="mt-2 max-h-[520px] w-full rounded-2xl border border-border object-contain"
+              />
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-5">
@@ -155,29 +255,35 @@ export default async function AdminOrderDetailPage({
               첨부된 시뮬레이터 이미지 없음
             </div>
           )}
-          <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-2xl bg-muted p-3 text-xs">
-            {JSON.stringify(simulator?.summary ?? simulator?.state_json ?? {}, null, 2)}
-          </pre>
         </section>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <History title="결제 이력" items={payments} empty="결제 이력이 없습니다." render={(payment) => (
           <>
-            <p className="font-medium">{payment.status} · {formatWon(payment.amount)}</p>
-            <p className="text-xs text-muted-foreground">{payment.payment_id ?? payment.method}</p>
+            <p className="font-medium">{PAYMENT_STATUS_LABELS[payment.status] ?? payment.status} · {formatWon(payment.amount)}</p>
+            <p className="text-xs text-muted-foreground">{payment.method ? `결제 방식: ${payment.method}` : payment.payment_id}</p>
+            {payment.created_at && <p className="text-xs text-muted-foreground">{formatDateTime(payment.created_at)}</p>}
           </>
         )} />
         <History title="상태 이력" items={events} empty="상태 이력이 없습니다." render={(event) => (
           <>
-            <p className="font-medium">{event.previous_status ?? "-"} → {event.next_status}</p>
-            <p className="text-xs text-muted-foreground">{event.actor_type} · {event.created_at}</p>
+            <p className="font-medium">
+              {event.previous_status ? STATUS_LABELS[event.previous_status as keyof typeof STATUS_LABELS] ?? event.previous_status : "신규"}
+              {" → "}
+              {STATUS_LABELS[event.next_status as keyof typeof STATUS_LABELS] ?? event.next_status}
+            </p>
+            <p className="text-xs text-muted-foreground">{ACTOR_LABELS[event.actor_type] ?? event.actor_type} · {formatDateTime(event.created_at)}</p>
+            {event.note && <p className="mt-1 text-xs text-muted-foreground">{event.note}</p>}
           </>
         )} />
         <History title="알림 이력" items={notifications} empty="알림 이력이 없습니다." render={(log) => (
           <>
-            <p className="font-medium">{log.template_key} · {log.status}</p>
-            <p className="text-xs text-muted-foreground">{log.channel} · {log.created_at}</p>
+            <p className="font-medium">
+              {NOTIFICATION_TEMPLATE_LABELS[log.template_key] ?? log.template_key} · {NOTIFICATION_STATUS_LABELS[log.status] ?? log.status}
+            </p>
+            <p className="text-xs text-muted-foreground">{CHANNEL_LABELS[log.channel] ?? log.channel} · {formatDateTime(log.created_at)}</p>
+            {log.error_message && <p className="mt-1 text-xs text-red-600">{log.error_message}</p>}
           </>
         )} />
       </div>

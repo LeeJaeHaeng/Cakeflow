@@ -401,7 +401,7 @@ function StepRequests({
     size: initial?.size ?? "",
     sheet_flavor: initial?.sheet_flavor ?? "",
     rice_base: initial?.rice_base ?? "",
-    rice_flower_style: initial?.rice_flower_style ?? "dome",
+    rice_flower_style: initial?.product_key === "rice_flower" ? initial?.rice_flower_style : undefined,
     number_count: initial?.number_count ?? 2,
     two_tier: initial?.two_tier ?? false,
     filling: initial?.filling ?? [],
@@ -438,8 +438,8 @@ function StepRequests({
       sheet_flavor: "",
       rice_base: "",
       filling: [],
-      rice_flower_style: productKey === "rice_flower" ? "dome" : undefined,
-      number_count: productKey === "number_rice" ? 2 : undefined,
+      rice_flower_style: undefined,
+      number_count: productKey === "number_rice" || productKey === "rice_cupcake" ? 2 : undefined,
       lettering: false,
       two_tier: false,
       number_rice_cake: productKey === "number_rice",
@@ -487,6 +487,7 @@ function StepRequests({
     if (selectedVariant === "rice" && selectedProduct.key !== "number_rice" && selectedProduct.key !== "rice_cupcake") {
       if (!details.rice_base) return "떡 종류를 선택해주세요.";
       if (!details.filling?.[0]) return "떡안 필링을 선택해주세요.";
+      if (selectedProduct.key === "rice_flower" && !details.rice_flower_style) return "앙금플라워 스타일을 선택해주세요.";
       if (!details.reference_note?.trim() && !details.reference_image_url) return "원하시는 디자인 사진 또는 설명을 입력해주세요.";
     }
     if (!details.allergy?.trim()) return "알레르기 여부를 작성해주세요. 없으면 '없음'으로 입력해주세요.";
@@ -601,7 +602,7 @@ function StepRequests({
 
       {selectedProduct.key === "rice_flower" && (
         <div>
-          <FieldLabel>앙금플라워 스타일</FieldLabel>
+          <FieldLabel>앙금플라워 스타일<RequiredMark /></FieldLabel>
           <div className="grid grid-cols-1 gap-2">
             <OptionButton selected={details.rice_flower_style === "dome"} onClick={() => update({ rice_flower_style: "dome" })}>
               돔 스타일 (+0원)
@@ -855,7 +856,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
     ["떡 종류", requests.rice_base],
     ["숫자 개수", requests.product_key === "number_rice" ? `${requests.number_count ?? 2}개` : ""],
     ["컵케이크 수량", requests.product_key === "rice_cupcake" ? `${requests.number_count ?? 2}개` : ""],
-    ["앙금 스타일", requests.rice_flower_style === "dome" ? "돔 스타일" : requests.rice_flower_style === "crescent" ? "크레센트 스타일" : requests.rice_flower_style === "wreath_basic" ? "기본 리스" : requests.rice_flower_style === "wreath" ? "가득메운 리스" : requests.rice_flower_style === "blossom" ? "블라썸 스타일" : ""],
+    ["앙금플라워 스타일", requests.product_key === "rice_flower" ? requests.rice_flower_style === "dome" ? "돔 스타일" : requests.rice_flower_style === "crescent" ? "크레센트 스타일" : requests.rice_flower_style === "wreath_basic" ? "기본 리스" : requests.rice_flower_style === "wreath" ? "가득메운 리스" : requests.rice_flower_style === "blossom" ? "블라썸 스타일" : "" : ""],
     ["필링", requests.filling?.join(", ")],
     ["디자인 설명", requests.design_style],
     ["색감", requests.desired_color],

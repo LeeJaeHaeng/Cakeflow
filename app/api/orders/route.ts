@@ -51,7 +51,7 @@ export async function POST(request: Request) {
         ["떡 종류", details.rice_base],
         ["숫자 개수", details.product_key === "number_rice" ? `${details.number_count ?? 2}개` : ""],
         ["컵케이크 수량", details.product_key === "rice_cupcake" ? `${details.number_count ?? 2}개` : ""],
-        ["앙금 스타일", details.rice_flower_style === "dome" ? "돔 스타일" : details.rice_flower_style === "crescent" ? "크레센트 스타일" : details.rice_flower_style === "wreath_basic" ? "기본 리스" : details.rice_flower_style === "wreath" ? "가득메운 리스" : details.rice_flower_style === "blossom" ? "블라썸 스타일" : ""],
+        ["앙금플라워 스타일", details.product_key === "rice_flower" ? details.rice_flower_style === "dome" ? "돔 스타일" : details.rice_flower_style === "crescent" ? "크레센트 스타일" : details.rice_flower_style === "wreath_basic" ? "기본 리스" : details.rice_flower_style === "wreath" ? "가득메운 리스" : details.rice_flower_style === "blossom" ? "블라썸 스타일" : "" : ""],
         ["필링", Array.isArray(details.filling) ? details.filling.join(", ") : ""],
         ["디자인 설명", details.design_style],
         ["색감", details.desired_color],
