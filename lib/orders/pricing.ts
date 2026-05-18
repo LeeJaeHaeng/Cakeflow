@@ -1,6 +1,6 @@
 export type ProductKey =
   | "rice_flower"
-  | "tall_1_design"
+  | "rice_cupcake"
   | "knife_flower"
   | "figure_cake"
   | "design_cake"
@@ -15,7 +15,7 @@ export interface CakeOrderDetails {
   size?: string;
   sheet_flavor?: string;
   rice_base?: string;
-  rice_flower_style?: "basic" | "wreath" | "blossom";
+  rice_flower_style?: "dome" | "crescent" | "wreath_basic" | "wreath" | "blossom";
   number_count?: number;
   design_style?: string;
   desired_color?: string;
@@ -28,6 +28,7 @@ export interface CakeOrderDetails {
   filling?: string[];
   number_rice_cake?: boolean;
   reference_note?: string;
+  reference_image_url?: string;
   allergy?: string;
   extra_request?: string;
   payment_method?: PaymentMethod;
@@ -59,26 +60,26 @@ export const PRODUCT_OPTIONS: Array<{
   {
     key: "rice_flower",
     title: "앙금플라워떡케이크",
-    priceLabel: "55,000원",
+    priceLabel: "1호 55,000원부터",
     basePrice: 55000,
     category: "rice",
-    description: "1호~4호. 리스/블라썸 스타일 +7,000원, 문구 +3,000원.",
+    description: "1호~4호. 돔/크레센트/기본리스 추가금 없음, 가득메운 리스/블라썸 +7,000원, 문구 +3,000원.",
   },
   {
-    key: "tall_1_design",
-    title: "높은1호 케이크",
-    priceLabel: "95,000원",
-    basePrice: 95000,
-    category: "design",
-    description: "높은 1호 디자인 빵 케이크. 생크림 충전, 크림치즈크림, 앙금꽃 데코.",
+    key: "rice_cupcake",
+    title: "앙금플라워 떡 컵케이크",
+    priceLabel: "개당 16,000원",
+    basePrice: 16000,
+    category: "rice",
+    description: "2개부터 주문 가능. 컵케이크 1개당 앙금꽃 1송이 장식, 대량 주문은 문의.",
   },
   {
     key: "knife_flower",
     title: "나이프플라워케이크",
-    priceLabel: "55,000원",
-    basePrice: 55000,
-    category: "rice",
-    description: "높은 1호만 가능. 나이프로 그림 그리듯 디자인.",
+    priceLabel: "43,000원부터",
+    basePrice: 43000,
+    category: "design",
+    description: "빵케이크 카테고리. 디자인에 따라 추가금이 발생하며 문의가 필요합니다.",
   },
   {
     key: "figure_cake",
@@ -121,13 +122,13 @@ export const DEFAULT_SIMULATOR_EXAMPLES: SimulatorExampleMap = {
     "https://images.unsplash.com/photo-1729875749558-826bfeb4b1bb?w=640&h=640&fit=crop",
     "https://images.unsplash.com/photo-1762571807494-f67e8bf035d2?w=640&h=640&fit=crop",
   ],
-  tall_1_design: [
-    "https://images.unsplash.com/photo-1771738118209-fc3b654f431e?w=640&h=640&fit=crop",
-    "https://images.unsplash.com/photo-1595859806061-8163067b3119?w=640&h=640&fit=crop",
+  rice_cupcake: [
+    "https://images.unsplash.com/photo-1729875749558-826bfeb4b1bb?w=640&h=640&fit=crop",
+    "https://images.unsplash.com/photo-1762571807494-f67e8bf035d2?w=640&h=640&fit=crop",
   ],
   knife_flower: [
+    "https://images.unsplash.com/photo-1771738118209-fc3b654f431e?w=640&h=640&fit=crop",
     "https://images.unsplash.com/photo-1595859806061-8163067b3119?w=640&h=640&fit=crop",
-    "https://images.unsplash.com/photo-1672749103540-6eb52167fecf?w=640&h=640&fit=crop",
   ],
   figure_cake: [
     "https://images.unsplash.com/photo-1595859806061-8163067b3119?w=640&h=640&fit=crop",
@@ -166,11 +167,19 @@ export function normalizeSimulatorExamples(value: unknown): SimulatorExampleMap 
 }
 
 export const SIZE_OPTIONS = ["1호", "2호", "3호", "4호"];
-export const RICE_SIZE_DETAILS = ["1호 (15x7)", "2호 (18x7)", "3호 (21x7)", "4호 (24x7)"];
-export const DESIGN_SIZE_DETAILS = ["1호", "2호", "3호", "4호"];
+export const RICE_SIZE_DETAILS = ["1호 (15x7) 55,000원", "2호 (18x7) 65,000원", "3호 (21x7) 85,000원", "4호 (24x7) 105,000원"];
+export const DESIGN_SIZE_DETAILS = ["1호 (15x6) 43,000원", "2호 (18x6) 55,000원", "3호 (21x6) 65,000원", "4호 (24x6) 75,000원"];
 export const SHEET_FLAVORS = ["바닐라", "초코", "얼그레이"];
 export const RICE_BASE_OPTIONS = ["백설기", "단호박", "흑임자"];
-export const FILLING_OPTIONS = ["견과류", "딸기잼", "블루베리잼", "단호박잼", "흑임자잼", "통단팥"];
+export const RICE_FILLING_OPTIONS: Record<string, string[]> = {
+  백설기: ["딸기잼", "블루베리잼"],
+  단호박: ["단호박잼", "견과류", "단호박잼+견과류"],
+  흑임자: ["흑임자잼", "견과류", "흑임자잼+견과류"],
+};
+
+export function getRiceFillingOptions(riceBase: string | undefined) {
+  return riceBase ? RICE_FILLING_OPTIONS[riceBase] ?? [] : [];
+}
 
 export function getProduct(key: ProductKey | undefined) {
   return PRODUCT_OPTIONS.find((product) => product.key === key) ?? PRODUCT_OPTIONS[0];
@@ -196,30 +205,44 @@ export function calculatePrice(details: CakeOrderDetails): PriceQuote {
     basePrice = 40000 * count;
   }
 
+  if (product.key === "rice_cupcake") {
+    const count = Math.max(2, details.number_count ?? 2);
+    basePrice = 16000 * count;
+    unknownItems.push("대량 주문은 매장 문의");
+  }
+
   if (product.key === "rice_flower") {
+    if (details.size?.startsWith("2호")) basePrice = 65000;
+    if (details.size?.startsWith("3호")) basePrice = 85000;
+    if (details.size?.startsWith("4호")) basePrice = 105000;
+
     if (details.rice_flower_style === "wreath") {
-      addOns.push({ label: "리스 스타일 추가", amount: 7000 });
+      addOns.push({ label: "가득메운 리스 추가", amount: 7000 });
     }
     if (details.rice_flower_style === "blossom") {
-      addOns.push({ label: "블라썸 스타일 추가", amount: 7000 });
+      addOns.push({ label: "블라썸 디자인 추가", amount: 7000 });
     }
     if (details.lettering) {
       addOns.push({ label: "문구 추가", amount: 3000 });
     }
   }
 
-  if (product.key === "tall_1_design" && details.topper_request) {
-    unknownItems.push("샹드리에초/티아라 등 토퍼 비용");
+  if (product.category === "rice" && product.key !== "rice_flower" && product.key !== "number_rice" && details.phrase?.trim()) {
+    addOns.push({ label: "문구 추가", amount: 3000 });
   }
-  if (product.key === "knife_flower") {
-    unknownItems.push("데코/디자인 난이도별 추가금");
+
+  if (product.category === "design" && product.key !== "dessert") {
+    if (details.size?.startsWith("2호")) basePrice = 55000;
+    if (details.size?.startsWith("3호")) basePrice = 65000;
+    if (details.size?.startsWith("4호")) basePrice = 75000;
+    if (details.phrase?.trim()) addOns.push({ label: "레터링", amount: 3000 });
   }
+
   if (product.key === "figure_cake") {
     unknownItems.push("피규어 가격");
-    if (details.size && details.size !== "1호") unknownItems.push("1호 외 사이즈 추가금");
     if (details.two_tier) unknownItems.push("2단/높이 추가금");
   }
-  if (product.key === "design_cake") {
+  if (product.key === "design_cake" || product.key === "knife_flower") {
     if (details.design_style) unknownItems.push("그림/디자인 난이도별 추가금");
     if (details.two_tier) unknownItems.push("2단 제작 추가금");
   }

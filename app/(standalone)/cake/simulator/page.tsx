@@ -56,7 +56,7 @@ const BG_COLORS = [
   "#FFE4E1", "#E8F4F8",
 ];
 
-const CAKE_SIZE_OPTIONS = ["미니", "1호", "2호", "3호"];
+const CAKE_SIZE_OPTIONS = ["1호", "2호", "3호", "4호"];
 
 const RICE_PRESETS: Array<{ id: RiceLayoutPreset; label: string; items: Array<[string, number, number, number]> }> = [
   {
@@ -161,7 +161,7 @@ function ProductChooser({
   const groups = [
     {
       title: "앙금떡케이크",
-      description: "설기, 앙금꽃, 나이프플라워, 레터링 중심의 주문시안",
+      description: "설기, 앙금꽃, 컵케이크, 레터링 중심의 주문시안",
       icon: Flower2,
       items: SIMULATOR_PRODUCTS.filter((product) => product.category === "rice"),
     },

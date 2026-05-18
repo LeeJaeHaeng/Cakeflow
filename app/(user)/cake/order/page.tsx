@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import {
   DESIGN_SIZE_DETAILS,
-  FILLING_OPTIONS,
   PRODUCT_OPTIONS,
+  getRiceFillingOptions,
   RICE_BASE_OPTIONS,
   RICE_SIZE_DETAILS,
   SHEET_FLAVORS,
@@ -47,6 +47,10 @@ function isProductKey(value: string | null): value is ProductKey {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="block text-sm font-medium mb-1.5">{children}</label>;
+}
+
+function RequiredMark() {
+  return <span className="ml-1 text-primary">*</span>;
 }
 
 function OptionButton({
@@ -263,14 +267,13 @@ function StepCustomer({ onNext }: StepProps) {
 function StepPickup({ onNext, onBack }: StepProps) {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("14:00");
-  const [persons, setPersons] = useState(1);
 
   const minDate = new Date();
   minDate.setDate(minDate.getDate() + 3);
   const minDateStr = minDate.toISOString().split("T")[0];
 
   const handleNext = () => {
-    sessionStorage.setItem("order_pickup", JSON.stringify({ date, time, persons }));
+    sessionStorage.setItem("order_pickup", JSON.stringify({ date, time }));
     onNext();
   };
 
@@ -309,28 +312,6 @@ function StepPickup({ onNext, onBack }: StepProps) {
               {t}
             </button>
           ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1.5">인원수 (몇 명분)</label>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setPersons((p) => Math.max(1, p - 1))}
-            className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-lg"
-            style={{ minHeight: "unset" }}
-          >
-            −
-          </button>
-          <span className="text-xl font-semibold w-8 text-center">{persons}</span>
-          <button
-            onClick={() => setPersons((p) => Math.min(50, p + 1))}
-            className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-lg"
-            style={{ minHeight: "unset" }}
-          >
-            +
-          </button>
-          <span className="text-sm text-muted-foreground">명</span>
         </div>
       </div>
 
@@ -420,7 +401,7 @@ function StepRequests({
     size: initial?.size ?? "",
     sheet_flavor: initial?.sheet_flavor ?? "",
     rice_base: initial?.rice_base ?? "",
-    rice_flower_style: initial?.rice_flower_style ?? "basic",
+    rice_flower_style: initial?.rice_flower_style ?? "dome",
     number_count: initial?.number_count ?? 2,
     two_tier: initial?.two_tier ?? false,
     filling: initial?.filling ?? [],
@@ -431,14 +412,19 @@ function StepRequests({
     candle: initial?.candle ?? false,
     number_rice_cake: initial?.number_rice_cake ?? false,
     reference_note: initial?.reference_note ?? "",
+    reference_image_url: initial?.reference_image_url ?? "",
     allergy: initial?.allergy ?? "",
     extra_request: initial?.extra_request ?? "",
   });
+  const [error, setError] = useState("");
+  const [uploadingReference, setUploadingReference] = useState(false);
   const selectedProduct = getProduct(details.product_key);
   const selectedVariant = getProductVariant(details.product_key);
   const quote = calculatePrice(details);
+  const fillingOptions = getRiceFillingOptions(details.rice_base);
 
   const update = (patch: Partial<CakeOrderDetails>) => {
+    setError("");
     setDetails((prev) => ({ ...prev, ...patch, form_variant: getProductVariant(prev.product_key) }));
   };
 
@@ -452,25 +438,67 @@ function StepRequests({
       sheet_flavor: "",
       rice_base: "",
       filling: [],
-      rice_flower_style: productKey === "rice_flower" ? "basic" : undefined,
+      rice_flower_style: productKey === "rice_flower" ? "dome" : undefined,
       number_count: productKey === "number_rice" ? 2 : undefined,
       lettering: false,
       two_tier: false,
       number_rice_cake: productKey === "number_rice",
+      reference_image_url: "",
     }));
   };
 
   const toggleFilling = (value: string) => {
-    setDetails((prev) => {
-      const current = prev.filling ?? [];
-      const next = current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value];
-      return { ...prev, filling: next, form_variant: selectedVariant };
-    });
+    update({ filling: [value] });
+  };
+
+  const uploadReferenceImage = async (file: File | undefined) => {
+    if (!file) return;
+    setError("");
+    setUploadingReference(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/simulator/upload", { method: "POST", body: formData });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.url) {
+        throw new Error(data?.error ?? "참고사진 업로드에 실패했습니다.");
+      }
+      update({ reference_image_url: data.url });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "참고사진 업로드에 실패했습니다.");
+    } finally {
+      setUploadingReference(false);
+    }
+  };
+
+  const validateDetails = () => {
+    if (selectedProduct.key === "dessert") return "";
+    if (selectedProduct.key === "rice_cupcake") {
+      if ((details.number_count ?? 0) < 2) return "떡 컵케이크는 2개부터 주문 가능합니다.";
+    } else if (selectedProduct.key !== "number_rice" && !details.size) {
+      return "사이즈를 선택해주세요.";
+    }
+    if (selectedVariant === "design") {
+      if (!details.sheet_flavor) return "빵맛을 선택해주세요.";
+      if (!details.desired_color?.trim() || !details.design_style?.trim()) return "색감과 디자인 설명을 작성해주세요.";
+      if (!details.phrase?.trim()) return "문구를 작성해주세요.";
+      if (!details.reference_note?.trim() && !details.reference_image_url) return "참고사진 또는 설명을 입력해주세요.";
+    }
+    if (selectedVariant === "rice" && selectedProduct.key !== "number_rice" && selectedProduct.key !== "rice_cupcake") {
+      if (!details.rice_base) return "떡 종류를 선택해주세요.";
+      if (!details.filling?.[0]) return "떡안 필링을 선택해주세요.";
+      if (!details.reference_note?.trim() && !details.reference_image_url) return "원하시는 디자인 사진 또는 설명을 입력해주세요.";
+    }
+    if (!details.allergy?.trim()) return "알레르기 여부를 작성해주세요. 없으면 '없음'으로 입력해주세요.";
+    return "";
   };
 
   const handleNext = () => {
+    const validationError = validateDetails();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     sessionStorage.setItem("order_requests", JSON.stringify({ ...details, form_variant: selectedVariant }));
     onNext();
   };
@@ -529,9 +557,9 @@ function StepRequests({
         )}
       </div>
 
-      {selectedProduct.key !== "dessert" && selectedProduct.key !== "tall_1_design" && selectedProduct.key !== "knife_flower" && (
+      {selectedProduct.key !== "dessert" && selectedProduct.key !== "number_rice" && selectedProduct.key !== "rice_cupcake" && (
         <div>
-          <FieldLabel>사이즈</FieldLabel>
+          <FieldLabel>사이즈<RequiredMark /></FieldLabel>
           <div className="grid grid-cols-2 gap-2">
             {(selectedVariant === "rice" ? RICE_SIZE_DETAILS : DESIGN_SIZE_DETAILS).map((size) => (
               <OptionButton key={size} selected={details.size === size} onClick={() => update({ size })}>
@@ -539,6 +567,7 @@ function StepRequests({
               </OptionButton>
             ))}
           </div>
+          <p className="mt-1.5 text-xs text-amber-700">2단 케이크와 높이 추가는 웹 주문서가 아닌 매장 문의로 진행됩니다.</p>
         </div>
       )}
 
@@ -556,15 +585,35 @@ function StepRequests({
         </div>
       )}
 
+      {selectedProduct.key === "rice_cupcake" && (
+        <div>
+          <FieldLabel>수량<RequiredMark /></FieldLabel>
+          <div className="grid grid-cols-4 gap-2">
+            {[2, 3, 4, 6, 8, 10, 12, 20].map((count) => (
+              <OptionButton key={count} selected={details.number_count === count} onClick={() => update({ number_count: count })}>
+                {count}개
+              </OptionButton>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">2개부터 주문 가능, 개당 16,000원입니다. 대량 주문은 문의가 필요합니다.</p>
+        </div>
+      )}
+
       {selectedProduct.key === "rice_flower" && (
         <div>
           <FieldLabel>앙금플라워 스타일</FieldLabel>
           <div className="grid grid-cols-1 gap-2">
-            <OptionButton selected={details.rice_flower_style === "basic"} onClick={() => update({ rice_flower_style: "basic" })}>
-              기본 스타일 (+0원)
+            <OptionButton selected={details.rice_flower_style === "dome"} onClick={() => update({ rice_flower_style: "dome" })}>
+              돔 스타일 (+0원)
+            </OptionButton>
+            <OptionButton selected={details.rice_flower_style === "crescent"} onClick={() => update({ rice_flower_style: "crescent" })}>
+              크레센트 스타일 (+0원)
+            </OptionButton>
+            <OptionButton selected={details.rice_flower_style === "wreath_basic"} onClick={() => update({ rice_flower_style: "wreath_basic" })}>
+              기본 리스 (+0원)
             </OptionButton>
             <OptionButton selected={details.rice_flower_style === "wreath"} onClick={() => update({ rice_flower_style: "wreath" })}>
-              리스 스타일 (+7,000원)
+              가득메운 리스 (+7,000원)
             </OptionButton>
             <OptionButton selected={details.rice_flower_style === "blossom"} onClick={() => update({ rice_flower_style: "blossom" })}>
               블라썸 가득메움 스타일 (+7,000원)
@@ -575,7 +624,7 @@ function StepRequests({
 
       {selectedVariant === "design" && selectedProduct.key !== "dessert" && (
         <div>
-          <FieldLabel>빵맛</FieldLabel>
+          <FieldLabel>빵맛<RequiredMark /></FieldLabel>
           <div className="grid grid-cols-3 gap-2">
             {SHEET_FLAVORS.map((flavor) => (
               <OptionButton key={flavor} selected={details.sheet_flavor === flavor} onClick={() => update({ sheet_flavor: flavor })}>
@@ -590,10 +639,10 @@ function StepRequests({
       {selectedVariant === "rice" && selectedProduct.key !== "number_rice" && selectedProduct.key !== "dessert" && (
         <>
           <div>
-            <FieldLabel>떡 종류</FieldLabel>
+            <FieldLabel>떡 종류<RequiredMark /></FieldLabel>
             <div className="grid grid-cols-3 gap-2">
               {RICE_BASE_OPTIONS.map((base) => (
-                <OptionButton key={base} selected={details.rice_base === base} onClick={() => update({ rice_base: base })}>
+                <OptionButton key={base} selected={details.rice_base === base} onClick={() => update({ rice_base: base, filling: [] })}>
                   {base}
                 </OptionButton>
               ))}
@@ -601,38 +650,39 @@ function StepRequests({
           </div>
 
           <div>
-            <FieldLabel>케이크 필링</FieldLabel>
+            <FieldLabel>떡안 필링<RequiredMark /></FieldLabel>
             <div className="grid grid-cols-2 gap-2">
-              {FILLING_OPTIONS.map((filling) => (
+              {fillingOptions.map((filling) => (
                 <OptionButton key={filling} selected={(details.filling ?? []).includes(filling)} onClick={() => toggleFilling(filling)}>
                   {filling}
                 </OptionButton>
               ))}
             </div>
+            {!details.rice_base && <p className="mt-1 text-xs text-muted-foreground">떡 종류를 먼저 선택하면 가능한 필링이 표시됩니다.</p>}
           </div>
         </>
       )}
 
       {selectedProduct.key !== "dessert" && (
         <div>
-          <FieldLabel>원하시는 색감 / 디자인 설명</FieldLabel>
-          <input
-            type="text"
+          <FieldLabel>원하시는 색감 / 디자인 설명 / 참고사진 설명<RequiredMark /></FieldLabel>
+          <textarea
             value={details.desired_color ?? ""}
             onChange={(e) => update({ desired_color: e.target.value })}
-            placeholder="예: 연핑크, 아이보리, 파스텔 보라"
-            className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
+            placeholder="원하시는 색감, 디자인 분위기, 참고사진 설명을 함께 적어주세요."
+            rows={3}
+            className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
           />
         </div>
       )}
 
-      {selectedProduct.key === "design_cake" || selectedProduct.key === "knife_flower" ? (
+      {selectedVariant === "design" && selectedProduct.key !== "dessert" ? (
         <div>
-          <FieldLabel>그림/디자인 난이도 설명</FieldLabel>
+          <FieldLabel>디자인 상세 설명<RequiredMark /></FieldLabel>
           <textarea
             value={details.design_style ?? ""}
             onChange={(e) => update({ design_style: e.target.value })}
-            placeholder="그림, 캐릭터, 색상 수, 참고 이미지 분위기 등을 적어주세요. 디자인에 따라 추가금이 발생합니다."
+            placeholder="그림, 캐릭터, 꽃장식 등 디자인 난이도 판단에 필요한 내용을 적어주세요."
             rows={3}
             className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
           />
@@ -652,55 +702,19 @@ function StepRequests({
         </div>
       )}
 
-      {selectedProduct.key === "tall_1_design" && (
-        <div>
-          <FieldLabel>샹드리에초 / 티아라 요청</FieldLabel>
-          <input
-            type="text"
-            value={details.topper_request ?? ""}
-            onChange={(e) => update({ topper_request: e.target.value })}
-            placeholder="예: 티아라 올림 희망, 샹드리에초 상담"
-            className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-      )}
-
       {selectedProduct.key !== "dessert" && (
         <div>
-          <FieldLabel>문구</FieldLabel>
+          <FieldLabel>문구{selectedVariant === "design" && <RequiredMark />}</FieldLabel>
           <input
             type="text"
             value={details.phrase ?? ""}
-            onChange={(e) => update({ phrase: e.target.value })}
-            placeholder="예: 사랑합니다 / Happy Birthday"
+            onChange={(e) => update({ phrase: e.target.value, lettering: e.target.value.trim().length > 0 })}
+            placeholder="10자 내외로 간단하게 작성해주세요."
             className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
           />
+          <p className="mt-1 text-xs text-muted-foreground">문구를 작성하면 레터링 추가금 3,000원이 자동 반영됩니다.</p>
         </div>
       )}
-
-      {selectedProduct.key === "rice_flower" && (
-        <label className="flex items-center gap-2 rounded-xl bg-muted px-3 py-3 text-sm">
-          <input
-            type="checkbox"
-            checked={details.lettering ?? false}
-            onChange={(e) => update({ lettering: e.target.checked })}
-            className="h-4 w-4 accent-primary"
-          />
-          문구 추가 (+3,000원)
-        </label>
-      )}
-
-      {selectedProduct.key === "figure_cake" || selectedProduct.key === "design_cake" ? (
-        <label className="flex items-center gap-2 rounded-xl bg-muted px-3 py-3 text-sm">
-          <input
-            type="checkbox"
-            checked={details.two_tier ?? false}
-            onChange={(e) => update({ two_tier: e.target.checked })}
-            className="h-4 w-4 accent-primary"
-          />
-          2단 / 높이 추가 상담
-        </label>
-      ) : null}
 
       {selectedVariant === "rice" && selectedProduct.key !== "number_rice" && selectedProduct.key !== "dessert" && (
         <div className="grid grid-cols-2 gap-2">
@@ -717,23 +731,46 @@ function StepRequests({
       )}
 
       <div>
-        <FieldLabel>참고사진 / 설명</FieldLabel>
+        <FieldLabel>참고사진 첨부</FieldLabel>
+        <div className="rounded-2xl border border-border bg-background p-3">
+          <label className="flex h-11 cursor-pointer items-center justify-center rounded-xl bg-muted text-sm font-medium text-muted-foreground hover:bg-muted/80">
+            {uploadingReference ? "업로드 중..." : details.reference_image_url ? "참고사진 변경" : "참고사진 업로드"}
+            <input
+              type="file"
+              accept="image/*,.heic"
+              className="sr-only"
+              onChange={(event) => {
+                void uploadReferenceImage(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+          </label>
+          {details.reference_image_url && (
+            <a href={details.reference_image_url} target="_blank" rel="noreferrer" className="mt-2 block truncate text-xs text-primary underline">
+              업로드된 참고사진 보기
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <FieldLabel>추가 참고 설명</FieldLabel>
         <textarea
           value={details.reference_note ?? ""}
           onChange={(e) => update({ reference_note: e.target.value })}
-          placeholder="보내주실 참고사진 설명이나 원하는 이미지 분위기를 적어주세요."
+          placeholder="사진으로 설명되지 않는 요청이 있으면 적어주세요."
           rows={3}
           className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
         />
       </div>
 
       <div>
-        <FieldLabel>알레르기 여부</FieldLabel>
+        <FieldLabel>알레르기 여부<RequiredMark /></FieldLabel>
         <input
           type="text"
           value={details.allergy ?? ""}
           onChange={(e) => update({ allergy: e.target.value })}
-          placeholder="예: 견과류 알레르기 있음"
+          placeholder="예: 없음 / 견과류 알레르기 있음"
           className="w-full h-12 px-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
@@ -748,6 +785,8 @@ function StepRequests({
           className="w-full bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
         />
       </div>
+
+      {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
         <div className="flex items-start justify-between gap-3">
@@ -815,17 +854,17 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
     ["빵맛", requests.sheet_flavor],
     ["떡 종류", requests.rice_base],
     ["숫자 개수", requests.product_key === "number_rice" ? `${requests.number_count ?? 2}개` : ""],
-    ["앙금 스타일", requests.rice_flower_style === "wreath" ? "리스 스타일" : requests.rice_flower_style === "blossom" ? "블라썸 스타일" : ""],
+    ["컵케이크 수량", requests.product_key === "rice_cupcake" ? `${requests.number_count ?? 2}개` : ""],
+    ["앙금 스타일", requests.rice_flower_style === "dome" ? "돔 스타일" : requests.rice_flower_style === "crescent" ? "크레센트 스타일" : requests.rice_flower_style === "wreath_basic" ? "기본 리스" : requests.rice_flower_style === "wreath" ? "가득메운 리스" : requests.rice_flower_style === "blossom" ? "블라썸 스타일" : ""],
     ["필링", requests.filling?.join(", ")],
     ["디자인 설명", requests.design_style],
     ["색감", requests.desired_color],
     ["문구", requests.phrase],
     ["문구 추가", requests.lettering ? "희망" : ""],
-    ["토퍼 요청", requests.topper_request],
     ["피규어 요청", requests.figure_request],
-    ["2단/높이 상담", requests.two_tier ? "희망" : ""],
     ["초 추가", requests.candle ? "희망" : ""],
     ["참고사진/설명", requests.reference_note],
+    ["참고사진 URL", requests.reference_image_url],
     ["알레르기", requests.allergy],
     ["기타 요청", requests.extra_request],
   ].filter(([, value]) => Boolean(value));
@@ -849,7 +888,6 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
           customer_token: customer.token,
           pickup_date: pickup.date,
           pickup_time: pickup.time,
-          persons: pickup.persons,
           customer_message: requests.extra_request,
           allergy: requests.allergy,
           cake_details: { ...requests, payment_method: "bank_transfer" },
@@ -906,10 +944,6 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
         <div className="flex justify-between">
           <span className="text-muted-foreground">픽업일</span>
           <span className="font-medium">{pickup.date} {pickup.time}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">인원</span>
-          <span className="font-medium">{pickup.persons}명분</span>
         </div>
       </div>
 
