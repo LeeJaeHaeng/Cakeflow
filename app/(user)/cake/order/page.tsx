@@ -904,7 +904,7 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
       setOrderNumber(data.order_number);
       setDone(true);
       clearOrderSession();
-      setTimeout(() => router.push(`/orders/track?order_number=${encodeURIComponent(data.order_number)}`), 2500);
+      setTimeout(() => router.push(`/orders/track?order_number=${encodeURIComponent(data.order_number)}`), 10000);
     } catch (err) {
       console.error(err);
       setErrorMessage(err instanceof Error ? err.message : "처리 중 오류가 발생했습니다.");
@@ -922,7 +922,11 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
         <h3 className="text-xl font-bold">주문 접수 완료</h3>
         <p className="text-muted-foreground text-sm text-center">
           주문번호 <strong className="text-foreground">{orderNumber}</strong>로<br />
-          접수되었습니다. 잠시 후 주문 조회 페이지로 이동합니다.
+          접수되었습니다. 10초 후 주문 조회 페이지로 이동합니다.
+        </p>
+        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-xs leading-relaxed text-amber-800">
+          주문번호 화면을 캡처하거나 주문번호를 복사해두세요.<br />
+          주문 조회에서는 주문번호뿐 아니라 주문자 휴대폰 번호로도 주문정보를 찾을 수 있습니다.
         </p>
         <p className="rounded-2xl bg-primary/5 px-4 py-3 text-center text-xs leading-relaxed text-primary">
           사장님이 주문서를 확인한 뒤 계좌이체 입금 안내를 보내드립니다.
