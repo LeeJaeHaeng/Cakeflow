@@ -215,8 +215,8 @@ export async function GET(
 
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
-  const fontBytes = await readFile(path.join(process.cwd(), "public", "fonts", "NotoSansCJKkr-Regular.otf"));
-  const font = await doc.embedFont(fontBytes, { subset: true });
+  const fontBytes = await readFile(path.join(process.cwd(), "public", "fonts", "NotoSansKR-Regular.ttf"));
+  const font = await doc.embedFont(fontBytes, { subset: false });
   const boldFont = font;
   const ctx: PdfContext = { doc, page: doc.addPage(pageSize), font, boldFont, y: pageSize[1] - margin };
 
