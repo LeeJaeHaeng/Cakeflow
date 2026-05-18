@@ -65,7 +65,7 @@ OPENAI_API_KEY=
 ```
 
 `OPENAI_API_KEY`가 없으면 SNS 캡션 생성은 샘플 모드로 동작합니다.
-`NEXT_PUBLIC_PHONE_AUTH_DISABLED=true`이면 고객 주문서의 휴대폰 인증 단계를 임시로 건너뜁니다. 다시 활성화하려면 `false`로 바꾸거나 값을 제거하면 됩니다.
+`NEXT_PUBLIC_PHONE_AUTH_DISABLED`는 기본적으로 인증 단계를 비활성화합니다. 다시 활성화하려면 로컬과 Vercel 환경변수에 `NEXT_PUBLIC_PHONE_AUTH_DISABLED=false`를 명시하세요.
 
 ## 주요 경로
 

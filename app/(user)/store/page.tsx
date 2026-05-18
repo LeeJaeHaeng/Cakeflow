@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { DAY_KEYS, DAY_LABELS, type OperatingHours } from "@/lib/shop-settings";
 import { getShopSettings } from "@/lib/shop-settings-server";
 
@@ -17,20 +18,33 @@ function formatOperatingHours(operatingHours: OperatingHours) {
 export default async function StorePage() {
   const settings = await getShopSettings();
   const { shop_info: shopInfo, operating_hours: operatingHours } = settings;
-  const mapQuery = encodeURIComponent(shopInfo.address || shopInfo.name);
+  const mapQuery = encodeURIComponent(`${shopInfo.name} ${shopInfo.address}`.trim());
+  const mapUrl = `https://map.kakao.com/link/search/${mapQuery}`;
 
   return (
     <div className="px-4 py-6 max-w-lg mx-auto">
       <h1 className="mb-6 text-2xl font-bold text-foreground">{shopInfo.name}</h1>
 
       <div className="space-y-4">
-        {/* 지도 */}
-        <div className="aspect-video w-full overflow-hidden rounded-[var(--radius-lg)] bg-muted">
-          <iframe
-            src={`https://map.kakao.com/link/search/${mapQuery}`}
-            className="w-full h-full"
-            title={`${shopInfo.name} 지도`}
-          />
+        <div className="rounded-[var(--radius-lg)] border border-border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">{shopInfo.name}</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">{shopInfo.address}</p>
+          <div className="mt-4 flex gap-2">
+            <a
+              href={mapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-11 flex-1 items-center justify-center rounded-[var(--radius-md)] bg-primary px-3 text-sm font-semibold text-primary-foreground"
+            >
+              카카오맵에서 보기
+            </a>
+            <Link
+              href="/"
+              className="flex h-11 items-center justify-center rounded-[var(--radius-md)] border border-border px-3 text-sm font-medium text-foreground"
+            >
+              홈
+            </Link>
+          </div>
         </div>
 
         {/* 정보 카드 */}

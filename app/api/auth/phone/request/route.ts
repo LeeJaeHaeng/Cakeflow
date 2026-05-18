@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { requestOtp } from "@/lib/auth/otp";
 import { normalizeKoreanMobile } from "@/lib/phone";
+import { PHONE_AUTH_DISABLED, phoneAuthDisabledResponse } from "@/lib/phone-auth";
 
 export async function POST(request: Request) {
   try {
+    if (PHONE_AUTH_DISABLED) {
+      return NextResponse.json(phoneAuthDisabledResponse(), { status: 503 });
+    }
+
     const { phone: rawPhone } = await request.json();
 
     const phone = normalizeKoreanMobile(rawPhone);

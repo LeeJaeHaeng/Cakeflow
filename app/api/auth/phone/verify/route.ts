@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { verifyOtp } from "@/lib/auth/otp";
 import { createCustomerSession } from "@/lib/auth/customer";
+import { PHONE_AUTH_DISABLED, phoneAuthDisabledResponse } from "@/lib/phone-auth";
 
 export async function POST(request: Request) {
   try {
+    if (PHONE_AUTH_DISABLED) {
+      return NextResponse.json(phoneAuthDisabledResponse(), { status: 503 });
+    }
+
     const { request_id, code } = await request.json();
 
     if (!request_id || !code || String(code).length !== 6) {

@@ -1,8 +1,19 @@
 -- CakeFlow production operations layer
 
-CREATE TYPE quote_status AS ENUM ('not_required', 'pending_quote', 'quoted', 'accepted', 'expired');
-CREATE TYPE notification_channel AS ENUM ('alimtalk', 'sms');
-CREATE TYPE notification_status AS ENUM ('pending', 'sent', 'failed', 'fallback_sent');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quote_status') THEN
+    CREATE TYPE quote_status AS ENUM ('not_required', 'pending_quote', 'quoted', 'accepted', 'expired');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_channel') THEN
+    CREATE TYPE notification_channel AS ENUM ('alimtalk', 'sms');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_status') THEN
+    CREATE TYPE notification_status AS ENUM ('pending', 'sent', 'failed', 'fallback_sent');
+  END IF;
+END $$;
 
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS quote_status quote_status NOT NULL DEFAULT 'not_required',
@@ -137,37 +148,56 @@ ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipe_components ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Service role only order_status_events"
-  ON order_status_events FOR ALL
-  USING (auth.role() = 'service_role');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'order_status_events' AND policyname = 'Service role only order_status_events') THEN
+    CREATE POLICY "Service role only order_status_events"
+      ON order_status_events FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
 
-CREATE POLICY "Service role only notification_templates"
-  ON notification_templates FOR ALL
-  USING (auth.role() = 'service_role');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'notification_templates' AND policyname = 'Service role only notification_templates') THEN
+    CREATE POLICY "Service role only notification_templates"
+      ON notification_templates FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
 
-CREATE POLICY "Service role only notification_logs"
-  ON notification_logs FOR ALL
-  USING (auth.role() = 'service_role');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'notification_logs' AND policyname = 'Service role only notification_logs') THEN
+    CREATE POLICY "Service role only notification_logs"
+      ON notification_logs FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
 
-CREATE POLICY "Service role only payment_events"
-  ON payment_events FOR ALL
-  USING (auth.role() = 'service_role');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'payment_events' AND policyname = 'Service role only payment_events') THEN
+    CREATE POLICY "Service role only payment_events"
+      ON payment_events FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
 
-CREATE POLICY "Service role only review_tokens"
-  ON review_tokens FOR ALL
-  USING (auth.role() = 'service_role');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'review_tokens' AND policyname = 'Service role only review_tokens') THEN
+    CREATE POLICY "Service role only review_tokens"
+      ON review_tokens FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
 
-CREATE POLICY "Service role only inventory_items"
-  ON inventory_items FOR ALL
-  USING (auth.role() = 'service_role');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'inventory_items' AND policyname = 'Service role only inventory_items') THEN
+    CREATE POLICY "Service role only inventory_items"
+      ON inventory_items FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
 
-CREATE POLICY "Service role only stock_movements"
-  ON stock_movements FOR ALL
-  USING (auth.role() = 'service_role');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'stock_movements' AND policyname = 'Service role only stock_movements') THEN
+    CREATE POLICY "Service role only stock_movements"
+      ON stock_movements FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
 
-CREATE POLICY "Service role only recipe_components"
-  ON recipe_components FOR ALL
-  USING (auth.role() = 'service_role');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'recipe_components' AND policyname = 'Service role only recipe_components') THEN
+    CREATE POLICY "Service role only recipe_components"
+      ON recipe_components FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
+END $$;
 
 INSERT INTO notification_templates (key, channel, aligo_template_code, subject, body)
 VALUES

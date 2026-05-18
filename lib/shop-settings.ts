@@ -54,14 +54,30 @@ export const DEFAULT_SETTINGS: ShopSettings = {
   },
 };
 
+function isBrokenText(value: unknown) {
+  return typeof value === "string" && /\?{2,}/.test(value);
+}
+
+function cleanShopInfo(settings: Record<string, unknown>) {
+  const shopInfo = (settings.shop_info as Partial<ShopSettings["shop_info"]> | undefined) ?? {};
+  return {
+    ...DEFAULT_SETTINGS.shop_info,
+    ...shopInfo,
+    name: isBrokenText(shopInfo.name) ? DEFAULT_SETTINGS.shop_info.name : shopInfo.name ?? DEFAULT_SETTINGS.shop_info.name,
+    phone: isBrokenText(shopInfo.phone) ? DEFAULT_SETTINGS.shop_info.phone : shopInfo.phone ?? DEFAULT_SETTINGS.shop_info.phone,
+    address: isBrokenText(shopInfo.address) ? DEFAULT_SETTINGS.shop_info.address : shopInfo.address ?? DEFAULT_SETTINGS.shop_info.address,
+    kakao_url: isBrokenText(shopInfo.kakao_url) ? DEFAULT_SETTINGS.shop_info.kakao_url : shopInfo.kakao_url ?? DEFAULT_SETTINGS.shop_info.kakao_url,
+    instagram_url: isBrokenText(shopInfo.instagram_url)
+      ? DEFAULT_SETTINGS.shop_info.instagram_url
+      : shopInfo.instagram_url ?? DEFAULT_SETTINGS.shop_info.instagram_url,
+  };
+}
+
 export function mergeShopSettings(settings: Record<string, unknown>): ShopSettings {
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
-    shop_info: {
-      ...DEFAULT_SETTINGS.shop_info,
-      ...((settings.shop_info as Partial<ShopSettings["shop_info"]> | undefined) ?? {}),
-    },
+    shop_info: cleanShopInfo(settings),
     operating_hours: {
       ...DEFAULT_SETTINGS.operating_hours,
       ...((settings.operating_hours as Partial<OperatingHours> | undefined) ?? {}),

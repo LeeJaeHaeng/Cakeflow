@@ -31,6 +31,7 @@ import {
   type CakeOrderDetails,
   type ProductKey,
 } from "@/lib/orders/pricing";
+import { PHONE_AUTH_DISABLED } from "@/lib/phone-auth";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface StepProps {
@@ -72,8 +73,6 @@ function OptionButton({
 }
 
 // ── Step 1: 고객 정보 + OTP ────────────────────────────────────────────────
-const PHONE_AUTH_DISABLED = process.env.NEXT_PUBLIC_PHONE_AUTH_DISABLED === "true";
-
 function StepCustomer({ onNext }: StepProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");

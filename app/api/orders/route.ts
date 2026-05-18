@@ -7,8 +7,7 @@ import { sendOperationalNotification } from "@/lib/notifications/aligo";
 import { getInitialQuoteStatus, recordOrderStatusEvent } from "@/lib/orders/status";
 import { verifyCustomerSession } from "@/lib/auth/customer";
 import { normalizeKoreanMobile } from "@/lib/phone";
-
-const PHONE_AUTH_DISABLED = process.env.NEXT_PUBLIC_PHONE_AUTH_DISABLED === "true";
+import { PHONE_AUTH_DISABLED } from "@/lib/phone-auth";
 
 export async function POST(request: Request) {
   try {

@@ -97,7 +97,7 @@ npm run verify:parity
 
 문자인증 재활성화:
 
-1. Vercel과 로컬에서 `NEXT_PUBLIC_PHONE_AUTH_DISABLED=false`로 바꾸거나 값을 제거한다.
+1. Vercel과 로컬에서 `NEXT_PUBLIC_PHONE_AUTH_DISABLED=false`로 명시한다.
 2. `SMS_MOCK_MODE=false`와 Aligo SMS 환경변수가 실제 발송 가능한지 확인한다.
 3. `/cake/order`에서 인증번호 발송, 인증번호 확인, 주문 접수까지 테스트한다.
 
