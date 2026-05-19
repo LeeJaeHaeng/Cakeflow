@@ -166,7 +166,7 @@ export default function CustomerHomePage() {
                 style={{ minHeight: "unset" }}
               >
                 <Sparkles size={16} />
-                시뮬레이터 체험하기
+                주문하기
               </Link>
             </div>
           </motion.div>
