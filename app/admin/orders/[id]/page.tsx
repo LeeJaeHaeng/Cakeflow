@@ -87,9 +87,38 @@ function parseOrderMessage(message: string | null | undefined) {
     .filter((item) => item.value && item.label !== "참고사진 URL");
 }
 
+function getOrderItemDetails(order: any) {
+  const items = Array.isArray(order.order_items) ? order.order_items : [];
+  const optionRows = items
+    .map((item: any) => item?.options_json)
+    .filter((options: unknown) => options && typeof options === "object") as Array<Record<string, unknown>>;
+  return optionRows.find((options) => typeof options.reference_image_url === "string" && options.reference_image_url.trim()) ?? optionRows[0] ?? {};
+}
+
 function getCakeDetails(order: any) {
   const details = order.cake_details;
-  return details && typeof details === "object" ? details : {};
+  return details && typeof details === "object" ? details : getOrderItemDetails(order);
+}
+
+function extractMessageField(message: string | null | undefined, label: string) {
+  if (!message) return "";
+  const prefix = `${label}:`;
+  return message
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(prefix))
+    ?.slice(prefix.length)
+    .trim() ?? "";
+}
+
+function getReferenceImageUrl(order: any, cakeDetails: any) {
+  const candidates = [
+    cakeDetails.reference_image_url,
+    getOrderItemDetails(order).reference_image_url,
+    extractMessageField(order.customer_message, "참고사진 URL"),
+  ];
+
+  return candidates.find((value) => typeof value === "string" && value.trim())?.trim() ?? "";
 }
 
 async function getOrder(id: string) {
@@ -132,7 +161,7 @@ export default async function AdminOrderDetailPage({
   const quoteLabel = QUOTE_STATUS_LABELS[order.quote_status] ?? order.quote_status ?? "견적 불필요";
   const orderFields = parseOrderMessage(order.customer_message);
   const cakeDetails = getCakeDetails(order);
-  const referenceImageUrl = cakeDetails.reference_image_url || orderFields.find((item) => item.label === "참고사진 URL")?.value;
+  const referenceImageUrl = getReferenceImageUrl(order, cakeDetails);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 lg:p-6">

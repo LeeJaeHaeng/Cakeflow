@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -62,9 +63,38 @@ function parseOrderMessage(message: string | null | undefined) {
     .filter((item) => item.value && item.label !== "참고사진 URL");
 }
 
+function getOrderItemDetails(order: any) {
+  const items = Array.isArray(order.order_items) ? order.order_items : [];
+  const optionRows = items
+    .map((item: any) => item?.options_json)
+    .filter((options: unknown) => options && typeof options === "object") as Array<Record<string, unknown>>;
+  return optionRows.find((options) => typeof options.reference_image_url === "string" && options.reference_image_url.trim()) ?? optionRows[0] ?? {};
+}
+
 function getCakeDetails(order: any) {
   const details = order.cake_details;
-  return details && typeof details === "object" ? details : {};
+  return details && typeof details === "object" ? details : getOrderItemDetails(order);
+}
+
+function extractMessageField(message: string | null | undefined, label: string) {
+  if (!message) return "";
+  const prefix = `${label}:`;
+  return message
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(prefix))
+    ?.slice(prefix.length)
+    .trim() ?? "";
+}
+
+function getReferenceImageUrl(order: any, cakeDetails: any) {
+  const candidates = [
+    cakeDetails.reference_image_url,
+    getOrderItemDetails(order).reference_image_url,
+    extractMessageField(order.customer_message, "참고사진 URL"),
+  ];
+
+  return candidates.find((value) => typeof value === "string" && value.trim())?.trim() ?? "";
 }
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
@@ -153,6 +183,22 @@ function drawKeyValues(ctx: PdfContext, rows: Array<[string, string]>) {
   }
 }
 
+async function embedPdfImage(ctx: PdfContext, bytes: Uint8Array, contentType: string, imageUrl: string) {
+  const normalizedUrl = imageUrl.toLowerCase().split("?")[0];
+  const isPng = contentType.includes("png") || normalizedUrl.endsWith(".png");
+  const isJpeg = contentType.includes("jpeg") || contentType.includes("jpg") || /\.jpe?g$/.test(normalizedUrl);
+
+  try {
+    if (isPng) return await ctx.doc.embedPng(bytes);
+    if (isJpeg) return await ctx.doc.embedJpg(bytes);
+  } catch {
+    // Fall through to server-side conversion below.
+  }
+
+  const pngBytes = await sharp(Buffer.from(bytes)).rotate().png().toBuffer();
+  return ctx.doc.embedPng(pngBytes);
+}
+
 async function drawImageBlock(ctx: PdfContext, title: string, imageUrl: string | null | undefined) {
   drawSectionTitle(ctx, title);
   if (!imageUrl) {
@@ -165,9 +211,7 @@ async function drawImageBlock(ctx: PdfContext, title: string, imageUrl: string |
     if (!response.ok) throw new Error("이미지를 불러올 수 없습니다.");
     const bytes = new Uint8Array(await response.arrayBuffer());
     const contentType = response.headers.get("content-type") ?? "";
-    const image = contentType.includes("png") || imageUrl.toLowerCase().endsWith(".png")
-      ? await ctx.doc.embedPng(bytes)
-      : await ctx.doc.embedJpg(bytes);
+    const image = await embedPdfImage(ctx, bytes, contentType, imageUrl);
     const maxWidth = pageSize[0] - margin * 2;
     const maxHeight = 300;
     const scaled = image.scale(Math.min(maxWidth / image.width, maxHeight / image.height, 1));
@@ -179,8 +223,9 @@ async function drawImageBlock(ctx: PdfContext, title: string, imageUrl: string |
       height: scaled.height,
     });
     ctx.y -= scaled.height + 18;
-  } catch {
-    drawKeyValues(ctx, [["이미지", "PDF에 직접 삽입할 수 없는 이미지 형식입니다. 관리자 상세 화면에서 원본 이미지를 확인하세요."]]);
+  } catch (err) {
+    console.error("[work-order image]", err);
+    drawKeyValues(ctx, [["이미지", "첨부 이미지를 PDF에 삽입하지 못했습니다. 관리자 상세 화면에서 원본 이미지를 확인하세요."]]);
   }
 }
 
@@ -210,7 +255,7 @@ export async function GET(
   const simulator = order.simulator_sessions;
   const cakeDetails = getCakeDetails(order);
   const orderFields = parseOrderMessage(order.customer_message);
-  const referenceImageUrl = cakeDetails.reference_image_url || orderFields.find((item) => item.label === "참고사진 URL")?.value;
+  const referenceImageUrl = getReferenceImageUrl(order, cakeDetails);
   const simulatorImageUrl = simulator?.production_url ?? simulator?.preview_url;
 
   const doc = await PDFDocument.create();
