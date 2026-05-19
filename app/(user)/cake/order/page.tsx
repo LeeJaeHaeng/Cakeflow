@@ -1003,6 +1003,18 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
         </p>
       </div>
 
+      <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+        <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={13} /> 유의사항 & 환불 규정</p>
+        <div className="space-y-1">
+          <p>• 픽업을 원칙으로 합니다. 배달은 유료로 가능하며 다마스 택배로 진행됩니다.</p>
+          <p>• 날짜, 시간, 문구 변경은 1회만 가능합니다.</p>
+          <p>• 픽업 시간이 30분 이상 늦어질 경우 꼭 연락 주세요.</p>
+          <p>• 환불 규정: 픽업일 기준 3일 전 100% 환불, 2일 전부터 당일은 환불이 불가합니다.</p>
+          <p>• 떡 특성상 행사 당일 픽업하셔야 하며, 당일에 드셔야 가장 맛있게 드실 수 있습니다.</p>
+          <p>• 100% 수제 케이크입니다. 정성껏 준비해 드릴게요. 감사합니다.</p>
+        </div>
+      </div>
+
       <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl text-xs text-primary space-y-1">
         <p className="font-medium flex items-center gap-1.5"><ShieldCheck size={13} /> 실서비스 예약 안내</p>
         <p>• 모든 주문은 결제 없이 주문서만 먼저 접수합니다.</p>
