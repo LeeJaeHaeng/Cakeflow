@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Cake, CheckCircle2, ImagePlus, Loader2, Save, Sparkles, Upload, X } from "lucide-react";
+import { Cake, CheckCircle2, Loader2, Plus, Save, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
 import {
   DEFAULT_SIMULATOR_EXAMPLES,
@@ -13,9 +13,27 @@ import {
 } from "@/lib/orders/pricing";
 
 const EDITABLE_PRODUCTS = PRODUCT_OPTIONS.filter((product) => product.category !== "dessert");
+const SIMULATOR_SECTIONS = [
+  {
+    key: "rice",
+    title: "앙금떡케이크",
+    description: "앙금플라워, 숫자떡, 컵케이크 예시를 관리합니다.",
+    icon: Sparkles,
+    products: EDITABLE_PRODUCTS.filter((product) => product.category === "rice"),
+  },
+  {
+    key: "design",
+    title: "빵케이크",
+    description: "나이프플라워, 피규어, 디자인케이크 예시를 관리합니다.",
+    icon: Cake,
+    products: EDITABLE_PRODUCTS.filter((product) => product.category === "design"),
+  },
+] as const;
 
 function cloneExamples(examples: SimulatorExampleMap): SimulatorExampleMap {
-  return { ...examples };
+  return Object.fromEntries(
+    PRODUCT_OPTIONS.map((product) => [product.key, [...(examples[product.key] ?? [])]])
+  ) as SimulatorExampleMap;
 }
 
 export default function AdminSimulatorPage() {
@@ -34,14 +52,6 @@ export default function AdminSimulatorPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const updateUrl = (productKey: ProductKey, index: number, value: string) => {
-    setExamples((prev) => {
-      const urls = [...(prev[productKey] ?? [])];
-      urls[index] = value;
-      return { ...prev, [productKey]: urls };
-    });
-  };
-
   const saveExamples = async (nextExamples: SimulatorExampleMap) => {
     const res = await fetch("/api/admin/simulator/examples", {
       method: "PUT",
@@ -53,31 +63,75 @@ export default function AdminSimulatorPage() {
     return data?.examples as SimulatorExampleMap | undefined;
   };
 
-  const uploadExample = async (productKey: ProductKey, index: number, file: File | undefined) => {
+  const persistExamples = async (nextExamples: SimulatorExampleMap, message: string) => {
+    setExamples(nextExamples);
+    const savedExamples = await saveExamples(nextExamples);
+    if (savedExamples) setExamples(savedExamples);
+    toast.success(message);
+  };
+
+  const uploadImage = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("bucket", "cake-designs");
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.url) {
+      throw new Error(data?.detail ?? data?.error ?? "업로드에 실패했습니다.");
+    }
+    return String(data.url);
+  };
+
+  const uploadProductExample = async (productKey: ProductKey, file: File | undefined) => {
     if (!file) return;
-    const key = `${productKey}-${index}`;
+    const key = `product-${productKey}`;
     setUploadingKey(key);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("bucket", "cake-designs");
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.url) {
-        const urls = [...(examples[productKey] ?? [])];
-        urls[index] = data.url;
-        const nextExamples = { ...examples, [productKey]: urls };
-        setExamples(nextExamples);
-        await saveExamples(nextExamples);
-        toast.success("이미지를 업로드하고 저장했습니다.");
-      } else {
-        toast.error(data?.detail ?? data?.error ?? "업로드에 실패했습니다.");
-      }
+      const url = await uploadImage(file);
+      const nextExamples = {
+        ...examples,
+        [productKey]: [...(examples[productKey] ?? []), url],
+      };
+      await persistExamples(nextExamples, "상품 예시 이미지를 추가했습니다.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "업로드에 실패했습니다.");
     } finally {
       setUploadingKey(null);
     }
+  };
+
+  const uploadSectionExample = async (section: (typeof SIMULATOR_SECTIONS)[number], file: File | undefined) => {
+    if (!file) return;
+    const key = `section-${section.key}`;
+    setUploadingKey(key);
+    try {
+      const url = await uploadImage(file);
+      const nextExamples = { ...examples };
+      section.products.forEach((product) => {
+        nextExamples[product.key] = [...(nextExamples[product.key] ?? []), url];
+      });
+      await persistExamples(nextExamples, `${section.title} 섹션에 예시 이미지를 추가했습니다.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "업로드에 실패했습니다.");
+    } finally {
+      setUploadingKey(null);
+    }
+  };
+
+  const removeProductExample = async (productKey: ProductKey, index: number) => {
+    const nextExamples = {
+      ...examples,
+      [productKey]: (examples[productKey] ?? []).filter((_, itemIndex) => itemIndex !== index),
+    };
+    await persistExamples(nextExamples, "상품 예시 이미지를 삭제했습니다.");
+  };
+
+  const clearSectionExamples = async (section: (typeof SIMULATOR_SECTIONS)[number]) => {
+    const nextExamples = { ...examples };
+    section.products.forEach((product) => {
+      nextExamples[product.key] = [];
+    });
+    await persistExamples(nextExamples, `${section.title} 섹션 예시 이미지를 모두 삭제했습니다.`);
   };
 
   const save = async () => {
@@ -104,13 +158,13 @@ export default function AdminSimulatorPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 lg:p-6">
+    <div className="mx-auto max-w-6xl space-y-5 p-4 lg:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-primary">Simulator</p>
-          <h1 className="text-2xl font-bold">시뮬레이터 예시 사진</h1>
+          <p className="text-sm font-medium text-primary">Order Setup</p>
+          <h1 className="text-2xl font-bold">주문하기 수정</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            고객이 케이크 메뉴를 고를 때 함께 보는 예시 이미지를 관리합니다.
+            사용자 주문 화면처럼 앙금떡케이크와 빵케이크 섹션별 예시 이미지를 관리합니다.
           </p>
         </div>
         <button
@@ -124,76 +178,108 @@ export default function AdminSimulatorPage() {
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {EDITABLE_PRODUCTS.map((product, cardIndex) => {
-          const urls = examples[product.key] ?? [];
-          const Icon = product.category === "rice" ? Sparkles : Cake;
+      <div className="space-y-6">
+        {SIMULATOR_SECTIONS.map((section, sectionIndex) => {
+          const Icon = section.icon;
           return (
             <motion.section
-              key={product.key}
+              key={section.key}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: cardIndex * 0.03 }}
-              className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+              transition={{ delay: sectionIndex * 0.04 }}
+              className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm"
             >
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Icon size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <h2 className="font-semibold">{product.title}</h2>
-                    <span className="shrink-0 text-xs font-bold text-primary">
-                      {product.basePrice > 0 ? formatWon(product.basePrice) : product.priceLabel}
-                    </span>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon size={18} />
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{product.description}</p>
+                  <div>
+                    <h2 className="font-semibold">{section.title}</h2>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{section.description}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90">
+                    {uploadingKey === `section-${section.key}` ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                    섹션에 추가
+                    <input
+                      type="file"
+                      accept="image/*,.heic"
+                      className="sr-only"
+                      onChange={(event) => {
+                        void uploadSectionExample(section, event.target.files?.[0]);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { void clearSectionExamples(section); }}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                    style={{ minHeight: "unset" }}
+                  >
+                    <Trash2 size={13} />
+                    섹션 전체 삭제
+                  </button>
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {[0, 1, 2].map((index) => {
-                  const url = urls[index] ?? "";
+              <div className="grid gap-3 lg:grid-cols-2">
+                {section.products.map((product) => {
+                  const urls = examples[product.key] ?? [];
                   return (
-                    <div key={index} className="space-y-2">
-                      <div className="relative aspect-square overflow-hidden rounded-xl bg-muted">
-                        {url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                            <ImagePlus size={18} />
+                    <div key={product.key} className="rounded-2xl border border-border bg-background p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                          <Icon size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <h3 className="font-semibold">{product.title}</h3>
+                            <span className="shrink-0 text-xs font-bold text-primary">
+                              {product.basePrice > 0 ? formatWon(product.basePrice) : product.priceLabel}
+                            </span>
                           </div>
-                        )}
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{product.description}</p>
+                        </div>
                       </div>
-                      <div className="flex gap-1.5">
-                        <label className="flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg bg-muted px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80">
-                          {uploadingKey === `${product.key}-${index}` ? (
-                            <Loader2 size={13} className="animate-spin" />
+
+                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {urls.map((url, index) => (
+                          <div key={`${product.key}-${url}-${index}`} className="space-y-2">
+                            <div className="relative aspect-square overflow-hidden rounded-xl bg-muted">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt="" className="h-full w-full object-cover" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => { void removeProductExample(product.key, index); }}
+                              className="flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted"
+                              style={{ minHeight: "unset" }}
+                            >
+                              <X size={13} />
+                              삭제
+                            </button>
+                          </div>
+                        ))}
+                        <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 text-xs font-medium text-muted-foreground hover:bg-muted">
+                          {uploadingKey === `product-${product.key}` ? (
+                            <Loader2 size={18} className="animate-spin" />
                           ) : (
-                            <Upload size={13} />
+                            <Upload size={18} />
                           )}
-                          업로드
+                          이미지 추가
                           <input
                             type="file"
                             accept="image/*,.heic"
                             className="sr-only"
                             onChange={(event) => {
-                              void uploadExample(product.key, index, event.target.files?.[0]);
+                              void uploadProductExample(product.key, event.target.files?.[0]);
                               event.target.value = "";
                             }}
                           />
                         </label>
-                        {url && (
-                          <button
-                            type="button"
-                            onClick={() => updateUrl(product.key, index, "")}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
-                            style={{ minHeight: "unset" }}
-                          >
-                            <X size={13} />
-                          </button>
-                        )}
                       </div>
                     </div>
                   );

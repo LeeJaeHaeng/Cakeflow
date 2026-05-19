@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
+import { formatKoreanPhone } from "@/lib/phone";
 
 export async function GET() {
   const session = await verifyAdminSession();
@@ -24,6 +25,13 @@ export async function PUT(request: Request) {
   if (!session) return NextResponse.json({ error: "인증 필요" }, { status: 401 });
 
   const body = await request.json() as Record<string, unknown>;
+  const shopInfo = body.shop_info;
+  if (shopInfo && typeof shopInfo === "object" && "phone" in shopInfo) {
+    body.shop_info = {
+      ...shopInfo,
+      phone: formatKoreanPhone((shopInfo as { phone?: unknown }).phone),
+    };
+  }
   const supabase = await createServiceClient();
 
   const upserts = Object.entries(body).map(([key, value]) => ({

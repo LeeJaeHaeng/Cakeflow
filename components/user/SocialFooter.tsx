@@ -1,6 +1,7 @@
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { BUSINESS_INFO, LEGAL_LINKS } from "@/lib/legal";
 import { getShopSettings } from "@/lib/shop-settings-server";
+import { formatKoreanPhone, phoneTelHref } from "@/lib/phone";
 
 export async function SocialFooter() {
   const { shop_info: shopInfo } = await getShopSettings();
@@ -12,7 +13,7 @@ export async function SocialFooter() {
         <div className="space-y-1 text-xs leading-relaxed text-muted-foreground">
           <p>{BUSINESS_INFO.businessName} | 대표자: {BUSINESS_INFO.representative}</p>
           <p>사업자등록번호: {BUSINESS_INFO.businessNumber}</p>
-          <p>유선번호/대표 연락처: {BUSINESS_INFO.contact}</p>
+          <p>유선번호/대표 연락처: {formatKoreanPhone(BUSINESS_INFO.contact)}</p>
           <p>{BUSINESS_INFO.address}</p>
         </div>
 
@@ -36,7 +37,7 @@ export async function SocialFooter() {
             💬
           </a>
           <a
-            href={`tel:${BUSINESS_INFO.contact}`}
+            href={phoneTelHref(BUSINESS_INFO.contact)}
             className="flex h-11 w-11 items-center justify-center rounded-full border border-border text-xl transition-colors hover:border-primary"
             aria-label="전화 문의"
           >

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Search, Star, Phone, ShoppingBag, Loader2, CheckCircle2, Users, WalletCards } from "lucide-react";
+import { formatKoreanPhone, phoneTelHref } from "@/lib/phone";
 
 interface Customer {
   id: string;
@@ -210,7 +211,7 @@ export default function CustomersPage() {
                     {c.vip_flag && <Star size={11} className="fill-amber-400 text-amber-400 flex-shrink-0" />}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">
-                    {c.phone}
+                    {formatKoreanPhone(c.phone)}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {c.total_orders}회 · {formatWon(c.total_amount)}
@@ -252,7 +253,7 @@ export default function CustomersPage() {
                   </div>
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
                     <Phone size={13} />
-                    <a href={`tel:${selected.phone}`} className="hover:underline">{selected.phone}</a>
+                    <a href={phoneTelHref(selected.phone)} className="hover:underline">{formatKoreanPhone(selected.phone)}</a>
                   </p>
                 </div>
               </div>

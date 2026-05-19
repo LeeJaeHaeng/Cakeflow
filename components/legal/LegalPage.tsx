@@ -1,4 +1,5 @@
 import { BUSINESS_INFO } from "@/lib/legal";
+import { formatKoreanPhone } from "@/lib/phone";
 
 type Section = {
   title: string;
@@ -40,7 +41,7 @@ export function LegalPage({
         <p>상호: {BUSINESS_INFO.businessName}</p>
         <p>대표자명: {BUSINESS_INFO.representative}</p>
         <p>사업자등록번호: {BUSINESS_INFO.businessNumber}</p>
-        <p>유선번호/대표 연락처: {BUSINESS_INFO.contact}</p>
+        <p>유선번호/대표 연락처: {formatKoreanPhone(BUSINESS_INFO.contact)}</p>
         <p>사업장 주소: {BUSINESS_INFO.address}</p>
         <p>업태/종목: {BUSINESS_INFO.businessType} / {BUSINESS_INFO.businessItem}</p>
       </section>

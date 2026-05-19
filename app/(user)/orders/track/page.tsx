@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, CheckCircle2, Clock, Loader2, Package, Phone, Search, Star, Truck } from "lucide-react";
+import { formatKoreanPhone, phoneDigits } from "@/lib/phone";
 
 interface Order {
   id: string;
@@ -165,7 +166,7 @@ function TrackContent() {
 
   const search = async (overrideOrderNumber?: string) => {
     const queryOrderNumber = overrideOrderNumber ?? orderNumber;
-    if (!queryOrderNumber && (!phone || phone.length < 10)) return;
+    if (!queryOrderNumber && phoneDigits(phone).length < 10) return;
     setLoading(true);
     setSearched(false);
     try {
@@ -217,14 +218,14 @@ function TrackContent() {
                 type="tel"
                 placeholder="010-0000-0000"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
+                onChange={(e) => setPhone(formatKoreanPhone(e.target.value))}
                 onKeyDown={(e) => e.key === "Enter" && search()}
                 className="h-12 w-full rounded-xl bg-muted pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <button
               onClick={() => search()}
-              disabled={loading || (!orderNumber && phone.length < 10)}
+              disabled={loading || (!orderNumber && phoneDigits(phone).length < 10)}
               className="flex h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground disabled:opacity-50"
               style={{ minHeight: "unset" }}
             >

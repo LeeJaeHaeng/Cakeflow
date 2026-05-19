@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { ShoppingBag, Phone, MessageCircle } from "lucide-react";
 import { DEFAULT_SETTINGS, mergeShopSettings, type ShopSettings } from "@/lib/shop-settings";
+import { phoneTelHref } from "@/lib/phone";
 
 interface DessertProduct {
   id: string;
@@ -122,7 +123,7 @@ export default function DessertPage() {
             카카오 주문
           </a>
           <a
-            href={`tel:${shopInfo.phone}`}
+            href={phoneTelHref(shopInfo.phone)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-muted text-foreground rounded-xl text-sm font-medium"
           >
             <Phone size={16} />

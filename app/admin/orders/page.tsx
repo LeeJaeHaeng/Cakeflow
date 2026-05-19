@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Loader2,
 } from "lucide-react";
+import { formatKoreanPhone, phoneTelHref } from "@/lib/phone";
 
 const TABS = [
   { key: "all",    label: "전체",      statuses: [] },
@@ -178,7 +179,7 @@ function OrderCard({
                   <p className="text-xs text-muted-foreground mb-1">연락처</p>
                   <p className="flex items-center gap-1.5 font-medium">
                     <Phone size={13} />
-                    <a href={`tel:${customer?.phone}`} className="hover:underline">{customer?.phone}</a>
+                    <a href={phoneTelHref(customer?.phone)} className="hover:underline">{formatKoreanPhone(customer?.phone)}</a>
                   </p>
                 </div>
                 <div>

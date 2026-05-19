@@ -6,7 +6,7 @@ import { calculatePrice, formatWon, getProduct, type CakeOrderDetails, type Prod
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
 import { getInitialQuoteStatus, recordOrderStatusEvent } from "@/lib/orders/status";
 import { verifyCustomerSession } from "@/lib/auth/customer";
-import { normalizeKoreanMobile } from "@/lib/phone";
+import { formatKoreanPhone, normalizeKoreanMobile, phoneDigits } from "@/lib/phone";
 import { PHONE_AUTH_DISABLED } from "@/lib/phone-auth";
 
 export async function POST(request: Request) {
@@ -128,10 +128,11 @@ export async function POST(request: Request) {
 
     const supabase = await createServiceClient();
 
+    const legacyPhone = phoneDigits(normalizedPhone);
     const { data: existing } = await supabase
       .from("customers")
       .select("id")
-      .eq("phone", normalizedPhone)
+      .in("phone", [normalizedPhone, legacyPhone])
       .maybeSingle();
 
     let customerId: string;
@@ -139,6 +140,7 @@ export async function POST(request: Request) {
     if (existing?.id) {
       customerId = existing.id;
       await supabase.from("customers").update({
+        phone: normalizedPhone,
         name: customer_name,
         allergy: allergy || (cake_details as CakeOrderDetails | undefined)?.allergy || null,
         updated_at: new Date().toISOString(),
@@ -312,11 +314,12 @@ export async function GET(request: Request) {
   } else if (phone) {
     const normalizedPhone = normalizeKoreanMobile(phone);
     if (!normalizedPhone) return NextResponse.json({ orders: [] });
+    const legacyPhone = phoneDigits(normalizedPhone);
 
     const { data: customer } = await supabase
       .from("customers")
       .select("id")
-      .eq("phone", normalizedPhone)
+      .in("phone", [normalizedPhone, legacyPhone])
       .maybeSingle();
 
     if (!customer) return NextResponse.json({ orders: [] });
@@ -330,8 +333,14 @@ export async function GET(request: Request) {
   let orders = data ?? [];
   if (phone && orderNumber) {
     const normalizedPhone = normalizeKoreanMobile(phone);
-    orders = orders.filter((order: { customers?: { phone?: string } | null }) => order.customers?.phone === normalizedPhone);
+    const normalizedDigits = phoneDigits(normalizedPhone ?? "");
+    orders = orders.filter((order: { customers?: { phone?: string } | null }) => phoneDigits(order.customers?.phone ?? "") === normalizedDigits);
   }
 
-  return NextResponse.json({ orders });
+  return NextResponse.json({
+    orders: orders.map((order: { customers?: { phone?: string } | null }) => ({
+      ...order,
+      customers: order.customers ? { ...order.customers, phone: formatKoreanPhone(order.customers.phone) } : order.customers,
+    })),
+  });
 }

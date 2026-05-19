@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
+import { formatKoreanPhone } from "@/lib/phone";
 
 const EXCLUDED_TOTAL_STATUSES = new Set(["cancelled", "refunded"]);
 
@@ -58,6 +59,7 @@ function applyOrderStats(customers: CustomerRow[], orders: OrderStatsRow[]) {
 
   return customers.map((customer) => ({
     ...customer,
+    phone: formatKoreanPhone(customer.phone),
     total_orders: stats.get(customer.id)?.total_orders ?? 0,
     total_amount: stats.get(customer.id)?.total_amount ?? 0,
     last_order_at: stats.get(customer.id)?.last_order_at ?? null,

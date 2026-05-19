@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DAY_KEYS, DAY_LABELS, type OperatingHours } from "@/lib/shop-settings";
 import { getShopSettings } from "@/lib/shop-settings-server";
+import { formatKoreanPhone } from "@/lib/phone";
 
 export const metadata: Metadata = {
   title: "매장정보",
@@ -51,7 +52,7 @@ export default async function StorePage() {
         <div className="divide-y divide-border rounded-[var(--radius-lg)] border border-border">
           <InfoRow label="주소" value={shopInfo.address} />
           <InfoRow label="운영시간" value={formatOperatingHours(operatingHours)} />
-          <InfoRow label="전화" value={shopInfo.phone || "문의는 카카오톡 채널을 이용해주세요"} />
+          <InfoRow label="전화" value={shopInfo.phone ? formatKoreanPhone(shopInfo.phone) : "문의는 카카오톡 채널을 이용해주세요"} />
         </div>
 
         {/* 연락처 버튼 */}

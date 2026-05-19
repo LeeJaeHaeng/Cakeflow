@@ -20,6 +20,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { DEFAULT_SETTINGS, mergeShopSettings, type ShopSettings } from "@/lib/shop-settings";
+import { phoneTelHref } from "@/lib/phone";
 
 function InstagramIcon({ size = 13 }: { size?: number }) {
   return (
@@ -420,7 +421,7 @@ export default function CustomerHomePage() {
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <a href={`tel:${shopInfo.phone}`} className="flex items-center gap-1.5 px-3 py-2 bg-muted rounded-xl text-xs font-medium text-foreground hover:bg-border transition-colors" style={{ minHeight: "unset" }}>
+              <a href={phoneTelHref(shopInfo.phone)} className="flex items-center gap-1.5 px-3 py-2 bg-muted rounded-xl text-xs font-medium text-foreground hover:bg-border transition-colors" style={{ minHeight: "unset" }}>
                 <Phone size={13} /> 전화 문의
               </a>
               <a href={shopInfo.kakao_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-2 bg-[#FEE500] text-[#3A1D1D] rounded-xl text-xs font-medium hover:opacity-90 transition-opacity" style={{ minHeight: "unset" }}>

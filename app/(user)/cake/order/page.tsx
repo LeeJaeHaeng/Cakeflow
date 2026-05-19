@@ -32,6 +32,7 @@ import {
   type ProductKey,
 } from "@/lib/orders/pricing";
 import { PHONE_AUTH_DISABLED } from "@/lib/phone-auth";
+import { formatKoreanPhone, normalizeKoreanMobile, phoneDigits } from "@/lib/phone";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface StepProps {
@@ -91,13 +92,13 @@ function StepCustomer({ onNext }: StepProps) {
   const [error, setError] = useState("");
 
   const saveCustomerAndContinue = () => {
-    const digits = phone.replace(/[^0-9]/g, "");
+    const digits = phoneDigits(phone);
     if (!name.trim()) return setError("이름을 입력해주세요.");
-    if (digits.length !== 11 || !digits.startsWith("010")) {
+    const formatted = normalizeKoreanMobile(digits);
+    if (!formatted) {
       return setError("010으로 시작하는 11자리 번호를 입력해주세요.");
     }
 
-    const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
     sessionStorage.setItem(
       "order_customer",
       JSON.stringify({ name: name.trim(), phone: formatted, token: PHONE_AUTH_DISABLED ? "phone-auth-disabled" : "" })
@@ -106,10 +107,12 @@ function StepCustomer({ onNext }: StepProps) {
   };
 
   const sendOtp = async () => {
-    const digits = phone.replace(/[^0-9]/g, "");
-    if (digits.length !== 11 || !digits.startsWith("010")) {
+    const digits = phoneDigits(phone);
+    const formatted = normalizeKoreanMobile(digits);
+    if (!formatted) {
       return setError("010으로 시작하는 11자리 번호를 입력해주세요.");
     }
+    setPhone(formatted);
     setError("");
     setSending(true);
     try {
@@ -155,8 +158,9 @@ function StepCustomer({ onNext }: StepProps) {
         return;
       }
       setVerified(true);
-      const digits = phone.replace(/[^0-9]/g, "");
-      const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+      const formatted = normalizeKoreanMobile(phone);
+      if (!formatted) return setError("010으로 시작하는 11자리 번호를 입력해주세요.");
+      setPhone(formatted);
       sessionStorage.setItem("order_customer", JSON.stringify({ name: name.trim(), phone: formatted, token: data.token }));
     } catch {
       setError("인증에 실패했습니다.");
@@ -191,7 +195,7 @@ function StepCustomer({ onNext }: StepProps) {
               type="tel"
               placeholder="010-0000-0000"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
+              onChange={(e) => setPhone(formatKoreanPhone(e.target.value))}
               disabled={verified}
               className="w-full h-12 pl-10 pr-4 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
             />
@@ -252,7 +256,7 @@ function StepCustomer({ onNext }: StepProps) {
 
       <button
         onClick={PHONE_AUTH_DISABLED ? saveCustomerAndContinue : onNext}
-        disabled={PHONE_AUTH_DISABLED ? !name.trim() || phone.replace(/[^0-9]/g, "").length !== 11 : !verified || !name.trim()}
+        disabled={PHONE_AUTH_DISABLED ? !name.trim() || phoneDigits(phone).length !== 11 : !verified || !name.trim()}
         className="w-full h-13 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm disabled:opacity-40 flex items-center justify-center gap-2 mt-2"
         style={{ minHeight: "unset" }}
       >

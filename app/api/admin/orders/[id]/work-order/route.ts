@@ -8,6 +8,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { STATUS_LABELS } from "@/lib/orders/status";
+import { formatKoreanPhone } from "@/lib/phone";
 
 export const runtime = "nodejs";
 
@@ -282,7 +283,7 @@ export async function GET(
   drawSectionTitle(ctx, "고객/픽업");
   drawKeyValues(ctx, [
     ["고객명", customer?.name ?? "-"],
-    ["연락처", customer?.phone ?? "-"],
+    ["연락처", formatKoreanPhone(customer?.phone ?? "-")],
     ["픽업일시", `${order.pickup_date} ${order.pickup_time ?? ""}`],
     ["알레르기", customer?.allergy ?? cakeDetails.allergy ?? "-"],
     ["고객 메모", customer?.memo ?? "-"],

@@ -29,7 +29,7 @@ const BASE_NAV_ITEMS = [
   { href: "/admin/calendar", icon: Calendar, label: "일정 캘린더", exact: false },
   { href: "/admin/customers", icon: Users, label: "고객관리", exact: false },
   { href: "/admin/designs", icon: Cake, label: "디자인 관리", exact: false },
-  { href: "/admin/simulator", icon: Sparkles, label: "시뮬레이터", exact: false },
+  { href: "/admin/simulator", icon: Sparkles, label: "주문하기 수정", exact: false },
   { href: "/admin/products", icon: Package, label: "디저트 상품", exact: false },
   { href: "/admin/sns", icon: Share2, label: "SNS 자동화", exact: false },
   { href: "/admin/analytics", icon: BarChart3, label: "통계 분석", exact: false },

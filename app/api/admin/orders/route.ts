@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
+import { formatKoreanPhone, phoneDigits } from "@/lib/phone";
 
 export async function GET(request: Request) {
   const session = await verifyAdminSession();
@@ -34,15 +35,22 @@ export async function GET(request: Request) {
   let items = data ?? [];
   if (search) {
     const q = search.toLowerCase();
+    const qDigits = phoneDigits(search);
     items = items.filter((o) => {
       const c = o.customers as { name: string; phone: string } | null;
       return (
         o.order_number.toLowerCase().includes(q) ||
         (c?.name ?? "").includes(q) ||
-        (c?.phone ?? "").includes(q)
+        (c?.phone ?? "").includes(q) ||
+        (qDigits.length > 0 && phoneDigits(c?.phone ?? "").includes(qDigits))
       );
     });
   }
 
-  return NextResponse.json({ orders: items });
+  return NextResponse.json({
+    orders: items.map((order) => ({
+      ...order,
+      customers: order.customers ? { ...order.customers, phone: formatKoreanPhone(order.customers.phone) } : order.customers,
+    })),
+  });
 }

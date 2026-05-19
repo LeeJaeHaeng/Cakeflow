@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { createServiceClient } from "@/lib/supabase/server";
 import { STATUS_LABELS } from "@/lib/orders/status";
+import { formatKoreanPhone } from "@/lib/phone";
 
 const STATUS_ACTIONS = [
   { status: "confirmed", label: "예약 확정" },
@@ -234,7 +235,7 @@ export default async function AdminOrderDetailPage({
           <h2 className="font-semibold">고객/픽업</h2>
           <div className="mt-4 space-y-3">
             <Info label="고객명" value={customer?.name ?? "-"} />
-            <Info label="전화번호" value={customer?.phone ?? "-"} />
+            <Info label="전화번호" value={formatKoreanPhone(customer?.phone ?? "-")} />
             <Info label="알러지" value={customer?.allergy ?? "-"} />
             <Info label="고객 메모" value={customer?.memo ?? "-"} />
             <Info label="픽업" value={`${order.pickup_date} ${order.pickup_time ?? ""}`} />
