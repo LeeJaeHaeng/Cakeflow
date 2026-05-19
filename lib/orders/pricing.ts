@@ -5,7 +5,8 @@ export type ProductKey =
   | "figure_cake"
   | "design_cake"
   | "number_rice"
-  | "dessert";
+  | "dessert"
+  | (string & {});
 
 export type PaymentMethod = "card" | "bank_transfer";
 
@@ -49,14 +50,20 @@ export interface PriceQuote {
   unknownItems: string[];
 }
 
-export const PRODUCT_OPTIONS: Array<{
+export type ProductCategory = "rice" | "design" | "dessert";
+
+export type ProductOption = {
   key: ProductKey;
   title: string;
   priceLabel: string;
   basePrice: number;
-  category: "rice" | "design" | "dessert";
+  category: ProductCategory;
   description: string;
-}> = [
+  enabled?: boolean;
+  sortOrder?: number;
+};
+
+export const PRODUCT_OPTIONS: ProductOption[] = [
   {
     key: "rice_flower",
     title: "앙금플라워떡케이크",
@@ -152,18 +159,51 @@ export function normalizeSimulatorExamples(value: unknown): SimulatorExampleMap 
   const next: SimulatorExampleMap = { ...DEFAULT_SIMULATOR_EXAMPLES };
   if (!value || typeof value !== "object") return next;
 
-  PRODUCT_OPTIONS.forEach((product) => {
-    const raw = (value as Partial<Record<ProductKey, unknown>>)[product.key];
+  Object.entries(value as Record<string, unknown>).forEach(([key, raw]) => {
     if (Array.isArray(raw)) {
       const urls = raw
         .filter((url): url is string => typeof url === "string")
         .map((url) => url.trim())
         .filter(Boolean);
-      next[product.key] = urls.length > 0 ? urls : DEFAULT_SIMULATOR_EXAMPLES[product.key];
+      if (urls.length > 0) next[key] = urls;
     }
   });
 
   return next;
+}
+
+export function normalizeProductOptions(value: unknown): ProductOption[] {
+  const source = Array.isArray(value) ? value : PRODUCT_OPTIONS;
+  const seen = new Set<string>();
+  const products = source
+    .map((item, index): ProductOption | null => {
+      if (!item || typeof item !== "object") return null;
+      const raw = item as Partial<ProductOption>;
+      const key = String(raw.key ?? "").trim();
+      const title = String(raw.title ?? "").trim();
+      const category = raw.category === "rice" || raw.category === "design" || raw.category === "dessert" ? raw.category : null;
+      if (!key || !title || !category || seen.has(key)) return null;
+      seen.add(key);
+      const basePrice = Number(raw.basePrice ?? 0);
+      return {
+        key,
+        title,
+        category,
+        basePrice: Number.isFinite(basePrice) && basePrice >= 0 ? Math.round(basePrice) : 0,
+        priceLabel: String(raw.priceLabel ?? "").trim() || (basePrice > 0 ? formatWon(Math.round(basePrice)) : "상담 후 확정"),
+        description: String(raw.description ?? "").trim(),
+        enabled: raw.enabled !== false,
+        sortOrder: Number.isFinite(Number(raw.sortOrder)) ? Number(raw.sortOrder) : index,
+      } satisfies ProductOption;
+    })
+    .filter((item): item is ProductOption => item !== null)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+  return products.length > 0 ? products : PRODUCT_OPTIONS;
+}
+
+export function getVisibleProducts(products: ProductOption[] = PRODUCT_OPTIONS) {
+  return normalizeProductOptions(products).filter((product) => product.enabled !== false && product.category !== "dessert");
 }
 
 export const SIZE_OPTIONS = ["1호", "2호", "3호", "4호"];
@@ -181,21 +221,21 @@ export function getRiceFillingOptions(riceBase: string | undefined) {
   return riceBase ? RICE_FILLING_OPTIONS[riceBase] ?? [] : [];
 }
 
-export function getProduct(key: ProductKey | undefined) {
-  return PRODUCT_OPTIONS.find((product) => product.key === key) ?? PRODUCT_OPTIONS[0];
+export function getProduct(key: ProductKey | undefined, products: ProductOption[] = PRODUCT_OPTIONS) {
+  return normalizeProductOptions(products).find((product) => product.key === key) ?? normalizeProductOptions(products)[0] ?? PRODUCT_OPTIONS[0];
 }
 
-export function getDefaultProductForVariant(variant: "design" | "rice"): ProductKey {
-  return variant === "rice" ? "rice_flower" : "design_cake";
+export function getDefaultProductForVariant(variant: "design" | "rice", products: ProductOption[] = PRODUCT_OPTIONS): ProductKey {
+  return getVisibleProducts(products).find((product) => product.category === variant)?.key ?? (variant === "rice" ? "rice_flower" : "design_cake");
 }
 
-export function getProductVariant(productKey: ProductKey | undefined): "design" | "rice" {
-  const product = getProduct(productKey);
+export function getProductVariant(productKey: ProductKey | undefined, products: ProductOption[] = PRODUCT_OPTIONS): "design" | "rice" {
+  const product = getProduct(productKey, products);
   return product.category === "rice" ? "rice" : "design";
 }
 
-export function calculatePrice(details: CakeOrderDetails): PriceQuote {
-  const product = getProduct(details.product_key);
+export function calculatePrice(details: CakeOrderDetails, products: ProductOption[] = PRODUCT_OPTIONS): PriceQuote {
+  const product = getProduct(details.product_key, products);
   const addOns: PriceLine[] = [];
   const unknownItems: string[] = [];
   let basePrice = product.basePrice;

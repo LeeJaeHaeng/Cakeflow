@@ -38,7 +38,9 @@ import {
   formatWon,
   getProduct,
   getProductVariant,
+  normalizeProductOptions,
   type ProductKey,
+  type ProductOption,
   type SimulatorExampleMap,
 } from "@/lib/orders/pricing";
 
@@ -145,31 +147,32 @@ function sanitizeSnapshotForSession<T>(value: T): T {
   return output as T;
 }
 
-function isProductKey(value: string | null): value is ProductKey {
-  return PRODUCT_OPTIONS.some((product) => product.key === value);
+function isProductKey(value: string | null, products: ProductOption[] = PRODUCT_OPTIONS): value is ProductKey {
+  return Boolean(value && products.some((product) => product.key === value));
 }
 
-const SIMULATOR_PRODUCTS = PRODUCT_OPTIONS.filter((product) => product.category !== "dessert");
-
 function ProductChooser({
+  products,
   examples,
   onChoose,
 }: {
+  products: ProductOption[];
   examples: SimulatorExampleMap;
   onChoose: (productKey: ProductKey) => void;
 }) {
+  const simulatorProducts = products.filter((product) => product.enabled !== false && product.category !== "dessert");
   const groups = [
     {
       title: "앙금떡케이크",
       description: "설기, 앙금꽃, 컵케이크, 레터링 중심의 주문시안",
       icon: Flower2,
-      items: SIMULATOR_PRODUCTS.filter((product) => product.category === "rice"),
+      items: simulatorProducts.filter((product) => product.category === "rice"),
     },
     {
       title: "빵케이크",
       description: "그림, 피규어, 레터링 중심의 주문시안",
       icon: Cake,
-      items: SIMULATOR_PRODUCTS.filter((product) => product.category === "design"),
+      items: simulatorProducts.filter((product) => product.category === "design"),
     },
   ];
 
@@ -311,10 +314,11 @@ function PageContent() {
   const designId = searchParams.get("designId");
   const requestedCakeType = searchParams.get("cakeType");
   const requestedProductKey = searchParams.get("productKey");
-  const initialProductKey = isProductKey(requestedProductKey) ? requestedProductKey : null;
+  const [products, setProducts] = useState<ProductOption[]>(normalizeProductOptions(PRODUCT_OPTIONS));
+  const initialProductKey = isProductKey(requestedProductKey, products) ? requestedProductKey : null;
   const initialType =
     initialProductKey
-      ? getProductVariant(initialProductKey)
+      ? getProductVariant(initialProductKey, products)
       : requestedCakeType === "rice" || requestedCakeType === "design"
         ? requestedCakeType
         : null;
@@ -346,12 +350,13 @@ function PageContent() {
       .then((res) => res.json())
       .then((data) => {
         if (data?.examples) setExamples(data.examples);
+        if (data?.products) setProducts(normalizeProductOptions(data.products));
       })
       .catch(() => {});
   }, []);
 
   const selectProduct = (nextProductKey: ProductKey) => {
-    const type = getProductVariant(nextProductKey);
+    const type = getProductVariant(nextProductKey, products);
     setCakeType(type);
     setProductKey(nextProductKey);
     setModeReady(true);
@@ -363,7 +368,7 @@ function PageContent() {
 
   const selectedObj = objects.find((o) => o.id === selectedId);
   const isRice = cakeType === "rice";
-  const selectedProduct = getProduct(productKey ?? initialProductKey ?? (isRice ? "rice_flower" : "design_cake"));
+  const selectedProduct = getProduct(productKey ?? initialProductKey ?? (isRice ? "rice_flower" : "design_cake"), products);
   const selectedExamples = examples?.[selectedProduct.key] ?? DEFAULT_SIMULATOR_EXAMPLES[selectedProduct.key] ?? [];
 
   const addImageToCanvas = useCallback((src: string) => {
@@ -572,7 +577,7 @@ function PageContent() {
   };
 
   if (!modeReady) {
-    return <ProductChooser examples={examples} onChoose={selectProduct} />;
+    return <ProductChooser products={products} examples={examples} onChoose={selectProduct} />;
   }
 
   return (

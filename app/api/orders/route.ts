@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServiceClient } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
-import { calculatePrice, formatWon, getProduct, type CakeOrderDetails, type ProductKey } from "@/lib/orders/pricing";
+import { PRODUCT_OPTIONS, calculatePrice, formatWon, getProduct, normalizeProductOptions, type CakeOrderDetails, type ProductKey } from "@/lib/orders/pricing";
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
 import { getInitialQuoteStatus, recordOrderStatusEvent } from "@/lib/orders/status";
 import { verifyCustomerSession } from "@/lib/auth/customer";
@@ -11,6 +11,7 @@ import { PHONE_AUTH_DISABLED } from "@/lib/phone-auth";
 
 export async function POST(request: Request) {
   try {
+    let activeProducts = normalizeProductOptions(PRODUCT_OPTIONS);
     const body = await request.json();
     const {
       customer_name,
@@ -40,8 +41,8 @@ export async function POST(request: Request) {
 
     const formatCakeDetails = (details: Record<string, unknown> | null | undefined) => {
       if (!details || typeof details !== "object") return "";
-      const quote = calculatePrice(details as CakeOrderDetails);
-      const product = getProduct((details as CakeOrderDetails).product_key);
+      const quote = calculatePrice(details as CakeOrderDetails, activeProducts);
+      const product = getProduct((details as CakeOrderDetails).product_key, activeProducts);
       const paymentMethod = "계좌이체";
 
       const rows: Array<[string, unknown]> = [
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
         : "";
 
       const rows: Array<[string, unknown]> = [
-        ["시뮬레이터 상품", snapshot.productKey ? getProduct(snapshot.productKey).title : snapshot.cakeType === "rice" ? "앙금떡케이크" : "디자인케이크"],
+        ["시뮬레이터 상품", snapshot.productKey ? getProduct(snapshot.productKey, activeProducts).title : snapshot.cakeType === "rice" ? "앙금떡케이크" : "디자인케이크"],
         ["시안 사이즈", snapshot.cakeSize],
         ["꽃 배치", snapshot.layoutPreset ? presetLabels[snapshot.layoutPreset] ?? snapshot.layoutPreset : ""],
         ["참고 이미지 용도", snapshot.referenceImageMode === "design-reference" ? "참고 디자인" : ""],
@@ -127,6 +128,12 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createServiceClient();
+    const { data: productSettings } = await (supabase as any)
+      .from("shop_settings")
+      .select("value")
+      .eq("key", "order_products")
+      .maybeSingle();
+    activeProducts = normalizeProductOptions(productSettings?.value);
 
     const legacyPhone = phoneDigits(normalizedPhone);
     const { data: existing } = await supabase
@@ -158,7 +165,7 @@ export async function POST(request: Request) {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const orderNumber = `CF${today}${nanoid(4).toUpperCase()}`;
     const details = (cake_details ?? {}) as CakeOrderDetails;
-    const priceQuote = calculatePrice(details);
+    const priceQuote = calculatePrice(details, activeProducts);
     const requestedConsultation = true;
 
     let simulatorDetails = "";

@@ -28,7 +28,9 @@ import {
   getDefaultProductForVariant,
   getProduct,
   getProductVariant,
+  normalizeProductOptions,
   type CakeOrderDetails,
+  type ProductOption,
   type ProductKey,
 } from "@/lib/orders/pricing";
 import { PHONE_AUTH_DISABLED } from "@/lib/phone-auth";
@@ -42,8 +44,8 @@ interface StepProps {
 
 type CakeFormVariant = "design" | "rice";
 
-function isProductKey(value: string | null): value is ProductKey {
-  return PRODUCT_OPTIONS.some((product) => product.key === value);
+function isProductKey(value: string | null, products: ProductOption[] = PRODUCT_OPTIONS): value is ProductKey {
+  return Boolean(value && products.some((product) => product.key === value));
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -393,10 +395,11 @@ function StepRequests({
   onBack,
   variant,
   selectedProductKey,
-}: StepProps & { variant: CakeFormVariant; selectedProductKey?: ProductKey }) {
+  products,
+}: StepProps & { variant: CakeFormVariant; selectedProductKey?: ProductKey; products: ProductOption[] }) {
   const saved = typeof window !== "undefined" ? sessionStorage.getItem("order_requests") : null;
   const initial = saved ? JSON.parse(saved) as CakeOrderDetails : null;
-  const defaultProduct = selectedProductKey ?? initial?.product_key ?? getDefaultProductForVariant(variant);
+  const defaultProduct = selectedProductKey ?? initial?.product_key ?? getDefaultProductForVariant(variant, products);
   const productLocked = Boolean(selectedProductKey);
 
   const [details, setDetails] = useState<CakeOrderDetails>({
@@ -422,18 +425,18 @@ function StepRequests({
   });
   const [error, setError] = useState("");
   const [uploadingReference, setUploadingReference] = useState(false);
-  const selectedProduct = getProduct(details.product_key);
-  const selectedVariant = getProductVariant(details.product_key);
-  const quote = calculatePrice(details);
+  const selectedProduct = getProduct(details.product_key, products);
+  const selectedVariant = getProductVariant(details.product_key, products);
+  const quote = calculatePrice(details, products);
   const fillingOptions = getRiceFillingOptions(details.rice_base);
 
   const update = (patch: Partial<CakeOrderDetails>) => {
     setError("");
-    setDetails((prev) => ({ ...prev, ...patch, form_variant: getProductVariant(prev.product_key) }));
+    setDetails((prev) => ({ ...prev, ...patch, form_variant: getProductVariant(prev.product_key, products) }));
   };
 
   const selectProduct = (productKey: ProductKey) => {
-    const nextVariant = getProductVariant(productKey);
+    const nextVariant = getProductVariant(productKey, products);
     setDetails((prev) => ({
       ...prev,
       product_key: productKey,
@@ -537,7 +540,7 @@ function StepRequests({
           </div>
         ) : (
           <div className="space-y-2">
-            {PRODUCT_OPTIONS.map((product) => (
+            {products.filter((product) => product.enabled !== false && product.category !== "dessert").map((product) => (
               <button
                 key={product.key}
                 type="button"
@@ -840,7 +843,7 @@ function StepRequests({
 }
 
 // ── Step 5: 최종 확인 + 주문 ──────────────────────────────────────────────
-function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { designId?: string; simulatorSessionId?: string }) {
+function StepPayment({ onBack, designId, simulatorSessionId, products }: StepProps & { designId?: string; simulatorSessionId?: string; products: ProductOption[] }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -850,8 +853,8 @@ function StepPayment({ onBack, designId, simulatorSessionId }: StepProps & { des
   const customer = JSON.parse(sessionStorage.getItem("order_customer") ?? "{}");
   const pickup = JSON.parse(sessionStorage.getItem("order_pickup") ?? "{}");
   const requests = JSON.parse(sessionStorage.getItem("order_requests") ?? "{}") as CakeOrderDetails;
-  const quote = calculatePrice(requests);
-  const selectedProduct = getProduct(requests.product_key);
+  const quote = calculatePrice(requests, products);
+  const selectedProduct = getProduct(requests.product_key, products);
 
   const detailRows = [
     ["상품", selectedProduct.title],
@@ -1058,25 +1061,33 @@ function PageContent() {
   const simulatorSessionId = searchParams.get("simulatorSessionId") ?? undefined;
   const requestedCakeType = searchParams.get("cakeType");
   const requestedProductKey = searchParams.get("productKey");
-  const selectedProductKey = isProductKey(requestedProductKey) ? requestedProductKey : undefined;
 
   const [step, setStep] = useState(0);
+  const [products, setProducts] = useState<ProductOption[]>(normalizeProductOptions(PRODUCT_OPTIONS));
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(() => {
     if (!simulatorSessionId || typeof window === "undefined") return undefined;
     return sessionStorage.getItem(`simulator_preview_${simulatorSessionId}`) ?? undefined;
   });
   const [designTitle, setDesignTitle] = useState<string | undefined>(undefined);
   const [designCategories, setDesignCategories] = useState<string[]>([]);
+  const selectedProductKey = isProductKey(requestedProductKey, products) ? requestedProductKey : undefined;
 
   const formVariant: CakeFormVariant = selectedProductKey
-    ? getProductVariant(selectedProductKey)
+    ? getProductVariant(selectedProductKey, products)
     : requestedCakeType === "rice" || designCategories.some((category) => category === "rice_cake" || category === "flower")
     ? "rice"
     : "design";
-  const selectedProductTitle = selectedProductKey ? getProduct(selectedProductKey).title : undefined;
+  const selectedProductTitle = selectedProductKey ? getProduct(selectedProductKey, products).title : undefined;
 
   // 시뮬레이터 세션 미리보기 & 디자인 제목 로드
   useEffect(() => {
+    fetch("/api/simulator/examples")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.products) setProducts(normalizeProductOptions(d.products));
+      })
+      .catch(() => {});
+
     if (simulatorSessionId) {
       const localPreview = sessionStorage.getItem(`simulator_preview_${simulatorSessionId}`);
 
@@ -1173,6 +1184,7 @@ function PageContent() {
                 onBack={back}
                 variant={formVariant}
                 selectedProductKey={selectedProductKey}
+                products={products}
               />
             )}
             {step === 4 && (
@@ -1181,6 +1193,7 @@ function PageContent() {
                 onBack={back}
                 designId={designId}
                 simulatorSessionId={simulatorSessionId}
+                products={products}
               />
             )}
           </motion.div>
