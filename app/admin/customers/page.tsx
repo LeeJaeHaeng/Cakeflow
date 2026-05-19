@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Search, Star, Phone, ShoppingBag, Loader2, CheckCircle2 } from "lucide-react";
+import { Search, Star, Phone, ShoppingBag, Loader2, CheckCircle2, Users, WalletCards } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -13,6 +13,7 @@ interface Customer {
   vip_flag: boolean;
   total_orders: number;
   total_amount: number;
+  last_order_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,14 +23,16 @@ interface OrderSummary {
   order_number: string;
   status: string;
   total_price: number;
+  confirmed_price: number | null;
   pickup_date: string;
   created_at: string;
-  order_items: { cake_designs: { title: string } | null }[];
+  order_items: { cake_designs: { title: string } | null; dessert_products?: { title: string } | null }[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "대기", confirmed: "확정", producing: "제작중",
   ready: "픽업대기", completed: "완료", cancelled: "취소",
+  refunded: "환불",
 };
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700",
@@ -38,7 +41,11 @@ const STATUS_COLORS: Record<string, string> = {
   ready: "bg-green-100 text-green-700",
   completed: "bg-gray-100 text-gray-600",
   cancelled: "bg-red-100 text-red-600",
+  refunded: "bg-red-100 text-red-600",
 };
+
+const formatWon = (amount: number) => `₩${amount.toLocaleString()}`;
+const formatShortDate = (value: string | null | undefined) => value ? new Date(value).toLocaleDateString("ko-KR") : "-";
 
 export default function CustomersPage() {
   const [search, setSearch] = useState("");
@@ -50,6 +57,9 @@ export default function CustomersPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [memo, setMemo] = useState("");
   const [savingMemo, setSavingMemo] = useState(false);
+  const totalCustomers = customers.length;
+  const vipCount = customers.filter((customer) => customer.vip_flag).length;
+  const totalRevenue = customers.reduce((sum, customer) => sum + customer.total_amount, 0);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -76,6 +86,11 @@ export default function CustomersPage() {
     try {
       const res = await fetch(`/api/admin/customers/${c.id}`);
       const data = await res.json();
+      if (data.customer) {
+        setSelected(data.customer);
+        setMemo(data.customer.memo ?? "");
+        setCustomers((prev) => prev.map((customer) => customer.id === data.customer.id ? data.customer : customer));
+      }
       setSelectedOrders(data.orders ?? []);
     } finally {
       setDetailLoading(false);
@@ -111,20 +126,44 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="p-4 lg:p-6 max-w-5xl mx-auto space-y-5">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 lg:p-6">
       <div>
         <h1 className="text-2xl font-bold">고객 관리</h1>
-        <p className="text-muted-foreground text-sm mt-1">단골 고객과 주문 이력을 확인하세요</p>
+        <p className="text-muted-foreground text-sm mt-1">전화번호 검색, 누적 주문금액, 고객별 주문 이력을 한 화면에서 확인하세요</p>
       </div>
 
-      <div className="flex gap-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">검색 결과 고객</p>
+            <Users size={16} className="text-primary" />
+          </div>
+          <p className="mt-2 text-2xl font-bold">{totalCustomers.toLocaleString()}명</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">VIP 고객</p>
+            <Star size={16} className="fill-amber-400 text-amber-400" />
+          </div>
+          <p className="mt-2 text-2xl font-bold">{vipCount.toLocaleString()}명</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">검색 결과 누적금액</p>
+            <WalletCards size={16} className="text-primary" />
+          </div>
+          <p className="mt-2 text-2xl font-bold">{formatWon(totalRevenue)}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && fetchCustomers()}
-            placeholder="이름, 전화번호 검색"
+            placeholder="이름, 전화번호 검색 (01012345678 또는 010-1234-5678)"
             className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -140,9 +179,9 @@ export default function CustomersPage() {
         </button>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
         {/* 목록 */}
-        <div className="space-y-2">
+        <div className="space-y-2 lg:max-h-[calc(100vh-260px)] lg:overflow-y-auto lg:pr-1">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 size={20} className="animate-spin text-muted-foreground" />
@@ -171,7 +210,10 @@ export default function CustomersPage() {
                     {c.vip_flag && <Star size={11} className="fill-amber-400 text-amber-400 flex-shrink-0" />}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">
-                    {c.total_orders}회 · ₩{c.total_amount.toLocaleString()}
+                    {c.phone}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {c.total_orders}회 · {formatWon(c.total_amount)}
                   </p>
                 </div>
               </motion.button>
@@ -180,13 +222,13 @@ export default function CustomersPage() {
         </div>
 
         {/* 상세 */}
-        <div className="lg:col-span-2">
+        <div className="order-first lg:order-none">
           {selected ? (
             <motion.div
               key={selected.id}
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-card rounded-2xl border border-border p-5 space-y-4"
+              className="space-y-4 rounded-2xl border border-border bg-card p-5 lg:sticky lg:top-4"
             >
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -222,17 +264,15 @@ export default function CustomersPage() {
                 </div>
                 <div className="bg-muted/50 rounded-xl p-3 text-center">
                   <p className="text-lg font-bold">
-                    {selected.total_amount >= 10000
-                      ? `₩${(selected.total_amount / 10000).toFixed(0)}만`
-                      : `₩${selected.total_amount.toLocaleString()}`}
+                    {formatWon(selected.total_amount)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">누적 금액</p>
                 </div>
                 <div className="bg-muted/50 rounded-xl p-3 text-center">
                   <p className="text-xs font-bold">
-                    {new Date(selected.created_at).toLocaleDateString("ko-KR")}
+                    {formatShortDate(selected.last_order_at ?? selected.created_at)}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">첫 방문</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">최근 주문</p>
                 </div>
               </div>
 
@@ -281,7 +321,7 @@ export default function CustomersPage() {
                         <div>
                           <p className="font-medium text-xs font-mono">{o.order_number}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {o.order_items?.[0]?.cake_designs?.title ?? "케이크"} · {o.pickup_date}
+                            {o.order_items?.[0]?.cake_designs?.title ?? o.order_items?.[0]?.dessert_products?.title ?? "주문 상품"} · {o.pickup_date}
                           </p>
                         </div>
                         <div className="text-right">
@@ -289,7 +329,7 @@ export default function CustomersPage() {
                             {STATUS_LABELS[o.status] ?? o.status}
                           </span>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {o.total_price > 0 ? `₩${o.total_price.toLocaleString()}` : "가격 미정"}
+                            {(o.confirmed_price ?? o.total_price) > 0 ? formatWon(o.confirmed_price ?? o.total_price) : "가격 미정"}
                           </p>
                         </div>
                       </div>
