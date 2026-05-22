@@ -20,11 +20,22 @@ export async function PATCH(
     description?: string | null;
     status?: string;
   };
+  const updatePayload = {
+    ...(body.title !== undefined ? { title: body.title } : {}),
+    ...(body.category !== undefined ? { category: body.category } : {}),
+    ...(body.price !== undefined ? { price: Number(body.price) } : {}),
+    ...(body.cost !== undefined ? { cost: body.cost == null ? null : Number(body.cost) } : {}),
+    ...(body.stock_count !== undefined ? { stock_count: Number(body.stock_count) } : {}),
+    ...(body.thumbnail_url !== undefined ? { thumbnail_url: body.thumbnail_url } : {}),
+    ...(body.description !== undefined ? { description: body.description } : {}),
+    ...(body.status !== undefined ? { status: body.status } : {}),
+    updated_at: new Date().toISOString(),
+  };
 
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("dessert_products")
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", id)
     .select()
     .single();

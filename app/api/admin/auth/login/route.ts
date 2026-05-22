@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createAdminSession, setAdminCookie } from "@/lib/auth/admin";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/security/rate-limit";
 
 async function loginWithEnvAdmin(email: string, password: string) {
+  if (process.env.NODE_ENV === "production") return false;
+
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
 
@@ -20,6 +23,12 @@ async function loginWithEnvAdmin(email: string, password: string) {
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const ip = getClientIp(request);
+    const ipLimit = checkRateLimit(`admin-login:ip:${ip}`, 20, 15 * 60 * 1000);
+    if (!ipLimit.allowed) return rateLimitResponse(ipLimit.resetAt);
+    const accountLimit = checkRateLimit(`admin-login:account:${normalizedEmail || "unknown"}`, 10, 15 * 60 * 1000);
+    if (!accountLimit.allowed) return rateLimitResponse(accountLimit.resetAt);
 
     if (!email || !password) {
       return NextResponse.json(
@@ -28,7 +37,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (await loginWithEnvAdmin(email, password)) {
+    if (await loginWithEnvAdmin(normalizedEmail, password)) {
       return NextResponse.json({ ok: true });
     }
 
@@ -37,7 +46,7 @@ export async function POST(request: Request) {
     // auth.users에서 직접 bcrypt 비교로 검증 (verify_admin_password SQL 함수)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: rows, error } = await (supabase as any).rpc("verify_admin_password", {
-      p_email: email,
+      p_email: normalizedEmail,
       p_password: password,
     });
 

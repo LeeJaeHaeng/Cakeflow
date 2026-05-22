@@ -910,6 +910,10 @@ function StepPayment({ onBack, designId, simulatorSessionId, products }: StepPro
 
       setOrderNumber(data.order_number);
       setDone(true);
+      sessionStorage.setItem(
+        "last_order_tracking",
+        JSON.stringify({ order_number: data.order_number, phone: customer.phone })
+      );
       clearOrderSession();
       setTimeout(() => router.push(`/orders/track?order_number=${encodeURIComponent(data.order_number)}`), 10000);
     } catch (err) {

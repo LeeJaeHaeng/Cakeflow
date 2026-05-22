@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
+import { getCapacityErrorMessage } from "@/lib/orders/capacity";
 import { recordOrderStatusEvent } from "@/lib/orders/status";
 
 export async function POST(
@@ -56,6 +57,8 @@ export async function POST(
       .select("*, customers(id, name, phone)")
       .single();
 
+    const capacityError = getCapacityErrorMessage(error);
+    if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });
     if (error || !order) return NextResponse.json({ error: "견적 확정 실패" }, { status: 500 });
 
     await recordOrderStatusEvent(supabase, {
@@ -93,6 +96,8 @@ export async function POST(
 
     return NextResponse.json(order);
   } catch (err) {
+    const capacityError = getCapacityErrorMessage(err);
+    if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });
     console.error("[admin/orders/quote]", err);
     return NextResponse.json({ error: "견적 확정 실패" }, { status: 500 });
   }

@@ -9,6 +9,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { STATUS_LABELS } from "@/lib/orders/status";
 import { formatKoreanPhone } from "@/lib/phone";
+import { fetchAllowedPublicStorageImage } from "@/lib/security/images";
 
 export const runtime = "nodejs";
 
@@ -208,10 +209,7 @@ async function drawImageBlock(ctx: PdfContext, title: string, imageUrl: string |
   }
 
   try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) throw new Error("이미지를 불러올 수 없습니다.");
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const contentType = response.headers.get("content-type") ?? "";
+    const { bytes, contentType } = await fetchAllowedPublicStorageImage(imageUrl);
     const image = await embedPdfImage(ctx, bytes, contentType, imageUrl);
     const maxWidth = pageSize[0] - margin * 2;
     const maxHeight = 300;

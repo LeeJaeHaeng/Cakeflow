@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
+import { getCapacityErrorMessage } from "@/lib/orders/capacity";
 import { STATUS_TEMPLATE_KEYS, recordOrderStatusEvent, type ProductionOrderStatus } from "@/lib/orders/status";
+import { sendReviewRequestNotification } from "@/lib/reviews/tokens";
 
 export async function GET(
   _req: Request,
@@ -53,6 +55,21 @@ export async function PATCH(
     cancel_reason?: string;
     internal_priority?: number;
   };
+  const updatePayload = {
+    ...(body.status !== undefined ? { status: body.status } : {}),
+    ...(body.total_price !== undefined ? { total_price: Number(body.total_price) } : {}),
+    ...(body.deposit_amount !== undefined ? { deposit_amount: Number(body.deposit_amount) } : {}),
+    ...(body.confirmed_price !== undefined ? { confirmed_price: body.confirmed_price == null ? null : Number(body.confirmed_price) } : {}),
+    ...(body.payment_status !== undefined ? { payment_status: body.payment_status } : {}),
+    ...(body.quote_status !== undefined ? { quote_status: body.quote_status } : {}),
+    ...(body.requires_consultation !== undefined ? { requires_consultation: body.requires_consultation } : {}),
+    ...(body.admin_memo !== undefined ? { admin_memo: body.admin_memo } : {}),
+    ...(body.pickup_date !== undefined ? { pickup_date: body.pickup_date } : {}),
+    ...(body.pickup_time !== undefined ? { pickup_time: body.pickup_time } : {}),
+    ...(body.cancel_reason !== undefined ? { cancel_reason: body.cancel_reason } : {}),
+    ...(body.internal_priority !== undefined ? { internal_priority: Number(body.internal_priority) } : {}),
+    updated_at: new Date().toISOString(),
+  };
 
   const supabase = await createServiceClient();
   const { data: before } = await (supabase as any)
@@ -63,11 +80,13 @@ export async function PATCH(
 
   const { data, error } = await (supabase as any)
     .from("orders")
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", id)
     .select("*, customers(id, name, phone)")
     .single();
 
+  const capacityError = getCapacityErrorMessage(error);
+  if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });
   if (error || !data) return NextResponse.json({ error: "수정 실패" }, { status: 500 });
 
   let notificationSent = false;
@@ -89,6 +108,11 @@ export async function PATCH(
         },
       });
       notificationSent = result.ok;
+    }
+
+    if (body.status === "completed" && before?.status !== "completed" && customer?.phone) {
+      const result = await sendReviewRequestNotification(supabase, request.url, data);
+      notificationSent = notificationSent || result.ok;
     }
 
     await recordOrderStatusEvent(supabase, {

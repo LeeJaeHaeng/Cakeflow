@@ -27,6 +27,21 @@ async function request(path) {
   return text;
 }
 
+async function requestJson(path, init) {
+  const res = await fetch(`${ROOT_URL}${path}`, {
+    cache: "no-store",
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  const text = await res.text();
+  const json = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(`${path} returned ${res.status}: ${text.slice(0, 200)}`);
+  return json;
+}
+
 async function waitForServer() {
   const deadline = Date.now() + 30_000;
   let lastError;
@@ -76,7 +91,8 @@ async function main() {
   const dessertId = randomUUID();
   const customerId = randomUUID();
   const orderId = randomUUID();
-  const reviewId = randomUUID();
+  const reviewToken = randomUUID();
+  let reviewId = null;
   const orderNumber = `PV${Date.now()}`;
   const customerPhone = `010-${String(Date.now()).slice(-4)}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
   const designTitle = `${MARK} 케이크`;
@@ -231,7 +247,8 @@ async function main() {
     assert(storeHtml.includes(shopInfo.address), "store page HTML did not show updated shop address");
     assert(storeHtml.includes("09:00 - 18:00"), "store page HTML did not show updated operating hours");
 
-    let ordersJson = JSON.parse(await request(`/api/orders?order_number=${encodeURIComponent(orderNumber)}`));
+    const orderLookupPath = `/api/orders?order_number=${encodeURIComponent(orderNumber)}&phone=${encodeURIComponent(customerPhone)}`;
+    let ordersJson = JSON.parse(await request(orderLookupPath));
     assert(ordersJson.orders.some((order) => order.id === orderId && order.status === "pending"), "public order lookup did not show inserted admin order status");
 
     const { error: orderReadyError } = await supabase
@@ -240,7 +257,7 @@ async function main() {
       .eq("id", orderId);
     if (orderReadyError) throw orderReadyError;
 
-    ordersJson = JSON.parse(await request(`/api/orders?phone=${encodeURIComponent(customerPhone)}`));
+    ordersJson = JSON.parse(await request(orderLookupPath));
     assert(ordersJson.orders.some((order) => order.id === orderId && order.status === "ready"), "public order lookup did not show updated admin order status");
 
     const { error: orderCompletedError } = await supabase
@@ -249,16 +266,27 @@ async function main() {
       .eq("id", orderId);
     if (orderCompletedError) throw orderCompletedError;
 
-    const { error: reviewInsertError } = await supabase.from("reviews").insert({
-      id: reviewId,
+    const { error: tokenInsertError } = await supabase.from("review_tokens").insert({
       order_id: orderId,
       customer_id: customerId,
-      design_id: designId,
-      rating: 5,
-      content: `${MARK} 리뷰`,
-      hidden: false,
+      token: reviewToken,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     });
-    if (reviewInsertError) throw reviewInsertError;
+    if (tokenInsertError) throw tokenInsertError;
+
+    const tokenJson = JSON.parse(await request(`/api/reviews?token=${encodeURIComponent(reviewToken)}`));
+    assert(tokenJson.order?.id === orderId && tokenJson.order?.design_id === designId, "review token lookup did not return the completed order");
+
+    const createdReview = await requestJson("/api/reviews", {
+      method: "POST",
+      body: JSON.stringify({
+        order_id: orderId,
+        review_token: reviewToken,
+        rating: 5,
+        content: `${MARK} 리뷰`,
+      }),
+    });
+    reviewId = createdReview.id;
 
     let reviewsJson = JSON.parse(await request(`/api/reviews?design_id=${encodeURIComponent(designId)}`));
     assert(reviewsJson.reviews.some((review) => review.id === reviewId && review.content === `${MARK} 리뷰`), "public reviews API did not show visible admin review");
@@ -280,12 +308,14 @@ async function main() {
         "shop settings API parity",
         "store page server-rendered shop info parity",
         "order status lookup parity",
+        "review token submission parity",
         "review visible/hidden parity",
       ],
       mark: MARK,
     }, null, 2));
   } finally {
-    await supabase.from("reviews").delete().eq("id", reviewId);
+    if (reviewId) await supabase.from("reviews").delete().eq("id", reviewId);
+    await supabase.from("review_tokens").delete().eq("token", reviewToken);
     await supabase.from("orders").delete().eq("id", orderId);
     await supabase.from("customers").delete().eq("id", customerId);
     await supabase.from("cake_designs").delete().eq("id", designId);

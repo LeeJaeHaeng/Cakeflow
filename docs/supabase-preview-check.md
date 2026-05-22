@@ -98,4 +98,6 @@ supabase/migrations/20260509074923_remote_history.sql
 supabase/migrations/20260509075058_remote_history.sql
 supabase/migrations/20260509120833_remote_history.sql
 supabase/migrations/20260518005246_production_ops.sql
+supabase/migrations/20260521090000_security_hardening.sql
+supabase/migrations/20260522090000_capacity_hardening.sql
 ```

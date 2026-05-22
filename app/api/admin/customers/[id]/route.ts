@@ -87,11 +87,17 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json() as { memo?: string; vip_flag?: boolean; allergy?: string };
+  const updatePayload = {
+    ...(body.memo !== undefined ? { memo: body.memo } : {}),
+    ...(body.vip_flag !== undefined ? { vip_flag: body.vip_flag } : {}),
+    ...(body.allergy !== undefined ? { allergy: body.allergy } : {}),
+    updated_at: new Date().toISOString(),
+  };
 
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("customers")
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", id)
     .select()
     .single();

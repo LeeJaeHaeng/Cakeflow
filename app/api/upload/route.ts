@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { nanoid } from "nanoid";
+import { validateImageUpload } from "@/lib/security/images";
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"];
-const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
 const ALLOWED_BUCKETS = new Set(["cake-designs", "simulator-previews"]);
 
 function isMissingBucketError(error: unknown) {
@@ -23,25 +23,12 @@ async function ensureBucket(supabase: Awaited<ReturnType<typeof createServiceCli
   const { error } = await supabase.storage.createBucket(bucket, {
     public: true,
     fileSizeLimit: MAX_SIZE,
+    allowedMimeTypes: ALLOWED_TYPES,
   });
 
   if (error && !error.message.toLowerCase().includes("already exists")) {
     throw error;
   }
-}
-
-function getExtension(file: File) {
-  return file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-}
-
-function getContentType(file: File) {
-  if (file.type) return file.type;
-  const ext = getExtension(file);
-  if (ext === "png") return "image/png";
-  if (ext === "webp") return "image/webp";
-  if (ext === "heic") return "image/heic";
-  if (ext === "heif") return "image/heif";
-  return "image/jpeg";
 }
 
 export async function POST(request: Request) {
@@ -59,31 +46,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "파일이 없습니다." }, { status: 400 });
   }
 
-  const ext = getExtension(file);
-  const contentType = getContentType(file);
-
-  if (!ALLOWED_TYPES.includes(contentType) && !ALLOWED_EXTENSIONS.includes(ext)) {
+  let image;
+  try {
+    image = await validateImageUpload(file, MAX_SIZE);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === "IMAGE_TOO_LARGE") {
+      return NextResponse.json(
+        { error: "파일 크기는 10MB 이하여야 합니다." },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       { error: "jpg, png, webp, heic 형식만 업로드 가능합니다." },
       { status: 400 }
     );
   }
 
-  if (file.size > MAX_SIZE) {
-    return NextResponse.json(
-      { error: "파일 크기는 10MB 이하여야 합니다." },
-      { status: 400 }
-    );
-  }
-
-  const filename = `${nanoid()}.${ext}`;
+  const filename = `${nanoid()}.${image.extension}`;
+  const uploadBuffer = new ArrayBuffer(image.bytes.byteLength);
+  new Uint8Array(uploadBuffer).set(image.bytes);
+  const uploadBody = new Blob([uploadBuffer], { type: image.contentType });
 
   const supabase = await createServiceClient();
 
   let uploadResult = await supabase.storage
     .from(bucket)
-    .upload(filename, file, {
-      contentType,
+    .upload(filename, uploadBody, {
+      contentType: image.contentType,
       upsert: false,
     });
 
@@ -91,8 +81,8 @@ export async function POST(request: Request) {
     await ensureBucket(supabase, bucket);
     uploadResult = await supabase.storage
       .from(bucket)
-      .upload(filename, file, {
-        contentType,
+      .upload(filename, uploadBody, {
+        contentType: image.contentType,
         upsert: false,
       });
   }

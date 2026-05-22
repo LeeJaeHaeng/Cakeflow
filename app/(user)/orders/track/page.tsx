@@ -19,10 +19,9 @@ interface Order {
   payment_status?: string;
   quote_status?: string;
   requires_consultation?: boolean;
-  admin_memo?: string | null;
   customer_message: string | null;
   order_type: string;
-  customers: { name: string; phone: string } | null;
+  customers: { phone: string } | null;
   order_items: {
     id: string;
     quantity: number;
@@ -137,12 +136,6 @@ function OrderCard({ order }: { order: Order }) {
             <span className="text-muted-foreground">주문일</span>
             <span>{new Date(order.created_at).toLocaleDateString("ko-KR")}</span>
           </div>
-          {order.admin_memo && (
-            <div>
-              <span className="text-muted-foreground">사장님 메모</span>
-              <p className="mt-1 rounded-lg bg-primary/5 p-2 text-xs text-primary">{order.admin_memo}</p>
-            </div>
-          )}
           {order.customer_message && (
             <div>
               <span className="text-muted-foreground">요청사항</span>
@@ -158,23 +151,28 @@ function OrderCard({ order }: { order: Order }) {
 function TrackContent() {
   const searchParams = useSearchParams();
   const initialOrderNumber = searchParams.get("order_number") ?? "";
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const saved = JSON.parse(sessionStorage.getItem("last_order_tracking") ?? "{}") as { phone?: string };
+    return saved.phone ? formatKoreanPhone(saved.phone) : "";
+  });
   const [orderNumber, setOrderNumber] = useState(initialOrderNumber);
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [searched, setSearched] = useState(false);
 
   const search = async (overrideOrderNumber?: string) => {
-    const queryOrderNumber = overrideOrderNumber ?? orderNumber;
-    if (!queryOrderNumber && phoneDigits(phone).length < 10) return;
+    const queryOrderNumber = (overrideOrderNumber ?? orderNumber).trim();
+    if (!queryOrderNumber || phoneDigits(phone).length !== 11) return;
     setLoading(true);
     setSearched(false);
     try {
       const params = new URLSearchParams();
-      if (queryOrderNumber) params.set("order_number", queryOrderNumber);
-      if (phone) params.set("phone", phone);
+      params.set("order_number", queryOrderNumber);
+      params.set("phone", phone);
       const res = await fetch(`/api/orders?${params.toString()}`);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "주문 조회에 실패했습니다.");
       setOrders(data.orders ?? []);
       setSearched(true);
     } catch {
@@ -186,9 +184,11 @@ function TrackContent() {
   };
 
   useEffect(() => {
-    if (initialOrderNumber) queueMicrotask(() => { void search(initialOrderNumber); });
+    if (initialOrderNumber && phoneDigits(phone).length === 11) {
+      queueMicrotask(() => { void search(initialOrderNumber); });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialOrderNumber]);
+  }, [initialOrderNumber, phone]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -196,7 +196,7 @@ function TrackContent() {
         <div className="mb-8 text-center">
           <div className="mb-3 text-4xl">🎂</div>
           <h1 className="text-2xl font-bold">주문 조회</h1>
-          <p className="mt-1 text-sm text-muted-foreground">주문번호 또는 휴대폰 번호로 진행 상태를 확인하세요</p>
+          <p className="mt-1 text-sm text-muted-foreground">주문번호와 주문자 휴대폰 번호로 진행 상태를 확인하세요</p>
         </div>
 
         <div className="mb-6 space-y-2">
@@ -225,7 +225,7 @@ function TrackContent() {
             </div>
             <button
               onClick={() => search()}
-              disabled={loading || (!orderNumber && phoneDigits(phone).length < 10)}
+              disabled={loading || !orderNumber.trim() || phoneDigits(phone).length !== 11}
               className="flex h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground disabled:opacity-50"
               style={{ minHeight: "unset" }}
             >

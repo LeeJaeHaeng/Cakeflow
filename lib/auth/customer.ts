@@ -1,8 +1,7 @@
 import { jwtVerify, SignJWT } from "jose";
+import { getJwtSecret } from "@/lib/auth/jwt-secret";
 
-const SECRET = new TextEncoder().encode(
-  process.env.ADMIN_JWT_SECRET ?? "dev-secret-change-in-prod"
-);
+const SECRET = getJwtSecret();
 
 export interface CustomerSession {
   phone: string;

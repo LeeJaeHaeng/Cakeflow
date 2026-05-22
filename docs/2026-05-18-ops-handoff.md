@@ -6,7 +6,7 @@
 - 고객은 주문서만 먼저 접수한다.
 - 사장님이 주문 내용을 확인한 뒤 카카오톡, 문자, 전화로 확정 금액과 계좌이체 안내를 전달한다.
 - 예약 확정은 관리자 주문 상세에서 계좌이체 입금 확인 후 처리한다.
-- 휴대폰 문자인증은 임시 비활성화한다. 기능 코드는 유지하고 환경변수로 즉시 재활성화할 수 있게 둔다.
+- 휴대폰 문자인증은 운영 환경에서 필수로 사용한다. 로컬 개발 환경에서만 환경변수로 임시 비활성화할 수 있다.
 
 ## 결제 플로우 변경 내용
 
@@ -39,13 +39,16 @@
 
 ```env
 NEXT_PUBLIC_PHONE_AUTH_DISABLED=true
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
 
-- `true`: 고객 주문서에서 인증번호 발송/확인 UI를 숨기고, 이름과 010 휴대폰 번호만 입력하면 다음 단계로 이동한다. 주문 API도 고객 토큰 검증을 건너뛴다.
-- `false` 또는 미설정: 기존 OTP 발송/확인 로직을 다시 사용한다.
+- `true`: 로컬 개발 환경에서만 고객 주문서 인증번호 발송/확인 UI를 숨긴다.
+- `false` 또는 미설정: 기존 OTP 발송/확인 로직을 사용한다.
+- 운영 환경에서는 코드가 이 값을 무시하고 휴대폰 인증을 요구한다.
+- `NEXT_PUBLIC_SITE_URL`은 리뷰 요청 알림에 들어가는 `/orders/review?token=...` 링크 기준 도메인이다.
 
-현재 로컬 `.env.local`에는 `NEXT_PUBLIC_PHONE_AUTH_DISABLED=true`가 추가되어 있다.
-Vercel Production/Preview/Development에도 같은 값을 설정해야 배포 환경에서 인증이 우회된다.
+현재 로컬 `.env.local`에는 개발 편의를 위해 `NEXT_PUBLIC_PHONE_AUTH_DISABLED=true`가 있을 수 있다.
+Vercel Production/Preview에는 `NEXT_PUBLIC_PHONE_AUTH_DISABLED=false` 또는 미설정을 유지해야 한다.
 
 ## PG 심사 대응 페이지
 
@@ -68,11 +71,13 @@ PG 계약은 보류하기로 했지만 사이트 심사 대응용 기본 페이�
 - Aligo 알림톡/SMS 모듈은 유지한다.
 - 템플릿 코드가 없거나 실패하면 SMS fallback으로 동작한다.
 - 결제 완료 템플릿 문구는 온라인 결제가 아니라 `입금 확인` 기준으로 수정했다.
+- 주문 상태가 `completed`로 처음 전환되면 30일짜리 리뷰 토큰을 발급/재사용해 리뷰 요청 링크를 발송한다.
 
 ## 데이터베이스와 마이그레이션
 
-- `supabase/migrations/0002_production_ops.sql`에는 운영 테이블, 결제/상태 이력, 알림 템플릿 seed가 포함되어 있다.
-- 이번 변경으로 새 마이그레이션은 만들지 않았다.
+- `supabase/migrations/20260518005246_production_ops.sql`에는 운영 테이블, 결제/상태 이력, 알림 템플릿 seed가 포함되어 있다.
+- `supabase/migrations/20260521090000_security_hardening.sql`에는 `shop_settings`, `reviews.design_id`, `reviews.hidden`, SNS/analytics RLS 보강이 포함되어 있다.
+- `supabase/migrations/20260522090000_capacity_hardening.sql`에는 주문 생성/픽업일 변경 시 `shop_capacity`를 DB row lock으로 검사하는 트리거가 포함되어 있다.
 - 기존 `payments` 테이블은 관리자 수동 입금/환불 기록 용도로 남겨둔다.
 
 ## 검증 명령

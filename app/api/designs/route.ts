@@ -5,6 +5,9 @@ import { verifyAdminSession } from "@/lib/auth/admin";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const includeHidden = searchParams.get("all") === "true";
+  if (includeHidden && !(await verifyAdminSession())) {
+    return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
+  }
 
   const supabase = await createServiceClient();
 

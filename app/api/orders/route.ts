@@ -4,13 +4,18 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
 import { PRODUCT_OPTIONS, calculatePrice, formatWon, getProduct, normalizeProductOptions, type CakeOrderDetails, type ProductKey } from "@/lib/orders/pricing";
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
+import { getCapacityErrorMessage } from "@/lib/orders/capacity";
 import { getInitialQuoteStatus, recordOrderStatusEvent } from "@/lib/orders/status";
 import { verifyCustomerSession } from "@/lib/auth/customer";
 import { formatKoreanPhone, normalizeKoreanMobile, phoneDigits } from "@/lib/phone";
 import { PHONE_AUTH_DISABLED } from "@/lib/phone-auth";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const createLimit = checkRateLimit(`orders:create:${getClientIp(request)}`, 10, 10 * 60 * 1000);
+    if (!createLimit.allowed) return rateLimitResponse(createLimit.resetAt);
+
     let activeProducts = normalizeProductOptions(PRODUCT_OPTIONS);
     const body = await request.json();
     const {
@@ -31,6 +36,13 @@ export async function POST(request: Request) {
 
     if (!customer_name || !customer_phone || !pickup_date) {
       return NextResponse.json({ error: "필수 정보가 누락되었습니다." }, { status: 400 });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(pickup_date))) {
+      return NextResponse.json({ error: "픽업일 형식이 올바르지 않습니다." }, { status: 400 });
+    }
+    const todayKst = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+    if (String(pickup_date) < todayKst) {
+      return NextResponse.json({ error: "지난 날짜로는 주문할 수 없습니다." }, { status: 400 });
     }
 
     const isMissingColumnError = (error: unknown) => {
@@ -128,12 +140,34 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createServiceClient();
-    const { data: productSettings } = await (supabase as any)
-      .from("shop_settings")
-      .select("value")
-      .eq("key", "order_products")
-      .maybeSingle();
+    const [{ data: productSettings }, { data: capacitySettings }, { data: capacityRow }] = await Promise.all([
+      (supabase as any)
+        .from("shop_settings")
+        .select("value")
+        .eq("key", "order_products")
+        .maybeSingle(),
+      (supabase as any)
+        .from("shop_settings")
+        .select("value")
+        .eq("key", "daily_capacity")
+        .maybeSingle(),
+      (supabase as any)
+        .from("shop_capacity")
+        .select("max_orders, is_holiday, current_count")
+        .eq("date", pickup_date)
+        .maybeSingle(),
+    ]);
     activeProducts = normalizeProductOptions(productSettings?.value);
+
+    if (capacityRow?.is_holiday) {
+      return NextResponse.json({ error: "선택한 날짜는 매장 휴무일입니다." }, { status: 409 });
+    }
+    const defaultMaxOrders = Number(capacitySettings?.value?.max_orders ?? 8);
+    const maxOrders = Number(capacityRow?.max_orders ?? defaultMaxOrders);
+    const currentCount = Number(capacityRow?.current_count ?? 0);
+    if (Number.isFinite(maxOrders) && maxOrders > 0 && currentCount >= maxOrders) {
+      return NextResponse.json({ error: "선택한 날짜는 예약이 마감되었습니다." }, { status: 409 });
+    }
 
     const legacyPhone = phoneDigits(normalizedPhone);
     const { data: existing } = await supabase
@@ -233,6 +267,10 @@ export async function POST(request: Request) {
     }
 
     const { data: order, error: orderErr } = orderResult;
+    const capacityError = getCapacityErrorMessage(orderErr);
+    if (capacityError) {
+      return NextResponse.json({ error: capacityError }, { status: 409 });
+    }
     if (orderErr || !order) throw orderErr;
 
     if (design_id) {
@@ -296,6 +334,10 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err) {
+    const capacityError = getCapacityErrorMessage(err);
+    if (capacityError) {
+      return NextResponse.json({ error: capacityError }, { status: 409 });
+    }
     console.error("[orders POST]", err);
     return NextResponse.json({ error: "주문 처리 중 오류가 발생했습니다." }, { status: 500 });
   }
@@ -306,48 +348,54 @@ export async function GET(request: Request) {
   const phone = searchParams.get("phone");
   const orderNumber = searchParams.get("order_number");
 
-  if (!phone && !orderNumber) {
-    return NextResponse.json({ error: "전화번호 또는 주문번호 필요" }, { status: 400 });
+  const lookupLimit = checkRateLimit(`orders:lookup:${getClientIp(request)}`, 30, 10 * 60 * 1000);
+  if (!lookupLimit.allowed) return rateLimitResponse(lookupLimit.resetAt);
+
+  if (!phone || !orderNumber) {
+    return NextResponse.json({ error: "주문번호와 주문자 휴대폰 번호를 함께 입력해주세요." }, { status: 400 });
   }
+
+  if (orderNumber.length > 32) {
+    return NextResponse.json({ error: "주문번호 형식이 올바르지 않습니다." }, { status: 400 });
+  }
+
+  const normalizedPhone = normalizeKoreanMobile(phone);
+  if (!normalizedPhone) return NextResponse.json({ orders: [] });
+  const normalizedDigits = phoneDigits(normalizedPhone);
 
   const supabase = await createServiceClient();
-  let query = (supabase as any)
+  const query = (supabase as any)
     .from("orders")
     .select("*, customers(name, phone), order_items(*, cake_designs(title, thumbnail_url))")
-    .order("created_at", { ascending: false });
-
-  if (orderNumber) {
-    query = query.eq("order_number", orderNumber);
-  } else if (phone) {
-    const normalizedPhone = normalizeKoreanMobile(phone);
-    if (!normalizedPhone) return NextResponse.json({ orders: [] });
-    const legacyPhone = phoneDigits(normalizedPhone);
-
-    const { data: customer } = await supabase
-      .from("customers")
-      .select("id")
-      .in("phone", [normalizedPhone, legacyPhone])
-      .maybeSingle();
-
-    if (!customer) return NextResponse.json({ orders: [] });
-    query = query.eq("customer_id", customer.id);
-  }
+    .eq("order_number", orderNumber)
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  let orders = data ?? [];
-  if (phone && orderNumber) {
-    const normalizedPhone = normalizeKoreanMobile(phone);
-    const normalizedDigits = phoneDigits(normalizedPhone ?? "");
-    orders = orders.filter((order: { customers?: { phone?: string } | null }) => phoneDigits(order.customers?.phone ?? "") === normalizedDigits);
-  }
+  const orders = (data ?? []).filter((order: { customers?: { phone?: string } | null }) =>
+    phoneDigits(order.customers?.phone ?? "") === normalizedDigits
+  );
 
   return NextResponse.json({
-    orders: orders.map((order: { customers?: { phone?: string } | null }) => ({
-      ...order,
-      customers: order.customers ? { ...order.customers, phone: formatKoreanPhone(order.customers.phone) } : order.customers,
+    orders: orders.map((order: any) => ({
+      id: order.id,
+      order_number: order.order_number,
+      order_type: order.order_type,
+      status: order.status,
+      pickup_date: order.pickup_date,
+      pickup_time: order.pickup_time,
+      total_price: order.total_price,
+      confirmed_price: order.confirmed_price ?? null,
+      payment_status: order.payment_status,
+      quote_status: order.quote_status ?? null,
+      requires_consultation: order.requires_consultation ?? true,
+      customer_message: order.customer_message,
+      created_at: order.created_at,
+      customers: order.customers ? { phone: formatKoreanPhone(order.customers.phone) } : null,
+      order_items: order.order_items ?? [],
     })),
   });
 }

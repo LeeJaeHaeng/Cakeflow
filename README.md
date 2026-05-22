@@ -40,6 +40,7 @@ npm run dev
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SITE_URL=
 
 ADMIN_JWT_SECRET=
 ADMIN_EMAIL=
@@ -59,13 +60,14 @@ ALIGO_TPL_COMPLETED=
 ALIGO_TPL_CANCELLED=
 ALIGO_TPL_REVIEW_REQUEST=
 SMS_MOCK_MODE=true
-NEXT_PUBLIC_PHONE_AUTH_DISABLED=true
+NEXT_PUBLIC_PHONE_AUTH_DISABLED=false
 
 OPENAI_API_KEY=
 ```
 
 `OPENAI_API_KEY`가 없으면 SNS 캡션 생성은 샘플 모드로 동작합니다.
-`NEXT_PUBLIC_PHONE_AUTH_DISABLED`는 기본적으로 인증 단계를 비활성화합니다. 다시 활성화하려면 로컬과 Vercel 환경변수에 `NEXT_PUBLIC_PHONE_AUTH_DISABLED=false`를 명시하세요.
+`NEXT_PUBLIC_SITE_URL`은 리뷰 요청 알림에 들어가는 고객 작성 링크의 기준 도메인입니다.
+`NEXT_PUBLIC_PHONE_AUTH_DISABLED=true`는 로컬 개발 환경에서만 휴대폰 인증을 건너뜁니다. 운영 환경에서는 코드가 이 값을 무시하고 휴대폰 인증을 요구합니다.
 
 ## 주요 경로
 
@@ -78,6 +80,7 @@ OPENAI_API_KEY=
 - `/cake/simulator?cakeType=design&productKey=design_cake` 빵케이크 계열 시뮬레이터
 - `/dessert` 디저트 상품
 - `/orders/track` 주문 조회
+- `/orders/review?token=...` 완료 주문 리뷰 작성
 - `/admin` 관리자 대시보드
 - `/admin/orders` 주문관리
 - `/admin/orders/[id]` 주문 상세 운영 콘솔
@@ -203,8 +206,8 @@ npm run build
   - `jpg`, `jpeg`, `png`, `webp`, `heic`, `heif` 이미지를 허용하고, 업로드 실패 시 관리자 화면에 오류를 표시합니다.
 - 관리자 로그인 fallback을 추가했습니다.
   - 기존 Supabase `verify_admin_password` RPC 로그인을 유지합니다.
-  - Supabase Auth/RPC 구성이 불안정한 환경에서도 `ADMIN_EMAIL`, `ADMIN_PASSWORD` 환경변수 기반 관리자 로그인이 가능합니다.
-  - 로컬 개발 기본 계정은 `.env.local`에 설정된 값을 사용합니다.
+  - `ADMIN_EMAIL`, `ADMIN_PASSWORD` 환경변수 기반 관리자 로그인은 로컬 개발 환경에서만 허용합니다.
+  - 운영 환경은 Supabase `verify_admin_password` RPC와 `ADMIN_JWT_SECRET` 설정이 필요합니다.
 - 관리자 표시 정보를 수정했습니다.
   - 관리자 프로필 이름을 `김은숙 사장님`으로 변경했습니다.
 
@@ -220,6 +223,6 @@ npm run build
 
 ## Supabase
 
-초기 스키마는 `supabase/migrations/0001_initial.sql`에 있습니다. 주요 테이블은 `customers`, `cake_designs`, `dessert_products`, `orders`, `order_items`, `reviews`, `sns_posts`, `analytics_daily`, `otp_requests`입니다.
+초기 스키마는 `supabase/migrations/20260507081739_initial.sql`에 있습니다. 운영 보강 스키마는 `20260518005246_production_ops.sql`, 보안 보강 스키마는 `20260521090000_security_hardening.sql`, 주문 마감 보강 스키마는 `20260522090000_capacity_hardening.sql`에 있습니다. 주요 테이블은 `customers`, `cake_designs`, `dessert_products`, `orders`, `order_items`, `reviews`, `review_tokens`, `sns_posts`, `analytics_daily`, `otp_requests`, `shop_settings`, `shop_capacity`입니다.
 
-운영 설정은 Phase 4에서 사용하는 `shop_settings` 테이블을 전제로 합니다. 배포/신규 환경 구성 시 Supabase 실제 스키마와 로컬 migration의 정합성을 확인해야 합니다.
+운영 설정은 `shop_settings` 테이블을 전제로 합니다. 배포/신규 환경 구성 시 Supabase 실제 스키마와 로컬 migration의 정합성을 확인해야 합니다.

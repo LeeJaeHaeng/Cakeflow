@@ -1,26 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
+import { validateImageUpload } from "@/lib/security/images";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/security/rate-limit";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const BUCKET = "simulator-previews";
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"];
-const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
-
-function getExtension(file: File) {
-  return file.name.split(".").pop()?.toLowerCase() ?? "png";
-}
-
-function getContentType(file: File) {
-  if (file.type) return file.type;
-  const ext = getExtension(file);
-  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
-  if (ext === "webp") return "image/webp";
-  if (ext === "heic") return "image/heic";
-  if (ext === "heif") return "image/heif";
-  return "image/png";
-}
-
 function isMissingBucketError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const storageError = error as { message?: string; status?: number; statusCode?: string | number };
@@ -46,6 +32,9 @@ async function ensureSimulatorBucket(supabase: Awaited<ReturnType<typeof createS
 
 export async function POST(request: Request) {
   try {
+    const uploadLimit = checkRateLimit(`simulator-upload:${getClientIp(request)}`, 20, 10 * 60 * 1000);
+    if (!uploadLimit.allowed) return rateLimitResponse(uploadLimit.resetAt);
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
 
@@ -53,29 +42,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "파일이 없습니다." }, { status: 400 });
     }
 
-    if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: "파일 크기는 5MB 이하여야 합니다." }, { status: 400 });
-    }
-
-    const ext = getExtension(file);
-    const contentType = getContentType(file);
-
-    if (!ALLOWED_TYPES.includes(contentType) && !ALLOWED_EXTENSIONS.includes(ext)) {
+    let image;
+    try {
+      image = await validateImageUpload(file, MAX_SIZE);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (message === "IMAGE_TOO_LARGE") {
+        return NextResponse.json({ error: "파일 크기는 5MB 이하여야 합니다." }, { status: 400 });
+      }
       return NextResponse.json({ error: "jpg, png, webp, heic 형식만 업로드 가능합니다." }, { status: 400 });
     }
 
-    const filename = `${nanoid()}.${ext}`;
+    const filename = `${nanoid()}.${image.extension}`;
+    const uploadBuffer = new ArrayBuffer(image.bytes.byteLength);
+    new Uint8Array(uploadBuffer).set(image.bytes);
+    const uploadBody = new Blob([uploadBuffer], { type: image.contentType });
     const supabase = await createServiceClient();
 
     let uploadResult = await supabase.storage
       .from(BUCKET)
-      .upload(filename, file, { contentType, upsert: false });
+      .upload(filename, uploadBody, { contentType: image.contentType, upsert: false });
 
     if (uploadResult.error && isMissingBucketError(uploadResult.error)) {
       await ensureSimulatorBucket(supabase);
       uploadResult = await supabase.storage
         .from(BUCKET)
-        .upload(filename, file, { contentType, upsert: false });
+        .upload(filename, uploadBody, { contentType: image.contentType, upsert: false });
     }
 
     if (uploadResult.error || !uploadResult.data) {

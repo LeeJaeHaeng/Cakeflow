@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { getJwtSecret } from "@/lib/auth/jwt-secret";
 
-const SECRET = new TextEncoder().encode(
-  process.env.ADMIN_JWT_SECRET ?? "dev-secret-change-in-prod"
-);
+const SECRET = getJwtSecret();
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

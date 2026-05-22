@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { sendOperationalNotification } from "@/lib/notifications/aligo";
+import { getCapacityErrorMessage } from "@/lib/orders/capacity";
 import { STATUS_TEMPLATE_KEYS, recordOrderStatusEvent, type ProductionOrderStatus } from "@/lib/orders/status";
+import { sendReviewRequestNotification } from "@/lib/reviews/tokens";
 
 export async function POST(
   request: Request,
@@ -36,6 +38,8 @@ export async function POST(
       .select("*, customers(id, name, phone)")
       .single();
 
+    const capacityError = getCapacityErrorMessage(error);
+    if (capacityError) return NextResponse.json({ error: capacityError }, { status: 409 });
     if (error || !order) return NextResponse.json({ error: "상태 변경 실패" }, { status: 500 });
 
     let notificationSent = false;
@@ -56,6 +60,11 @@ export async function POST(
         },
       });
       notificationSent = result.ok;
+    }
+
+    if (status === "completed" && before.status !== "completed" && customer?.phone) {
+      const result = await sendReviewRequestNotification(supabase, request.url, order);
+      notificationSent = notificationSent || result.ok;
     }
 
     await recordOrderStatusEvent(supabase, {

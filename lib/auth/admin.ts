@@ -1,9 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { getJwtSecret } from "@/lib/auth/jwt-secret";
 
-const SECRET = new TextEncoder().encode(
-  process.env.ADMIN_JWT_SECRET ?? "dev-secret-change-in-prod"
-);
+const SECRET = getJwtSecret();
 
 const COOKIE_NAME = "admin_session";
 

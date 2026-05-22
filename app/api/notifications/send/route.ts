@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { verifyAdminSession } from "@/lib/auth/admin";
 import { sendOperationalNotification, type NotificationTemplateKey } from "@/lib/notifications/aligo";
+import { sendReviewRequestNotification } from "@/lib/reviews/tokens";
 
 export async function POST(request: Request) {
   try {
@@ -17,11 +18,28 @@ export async function POST(request: Request) {
       variables?: Record<string, string | number | null | undefined>;
     };
 
-    if (!body.phone || !body.template_key) {
-      return NextResponse.json({ error: "phone, template_key 필요" }, { status: 400 });
+    if (!body.template_key) {
+      return NextResponse.json({ error: "template_key 필요" }, { status: 400 });
     }
 
     const supabase = await createServiceClient();
+    if (body.template_key === "review_request" && body.order_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: order, error } = await (supabase as any)
+        .from("orders")
+        .select("id, order_number, pickup_date, pickup_time, customer_id, customers(id, name, phone)")
+        .eq("id", body.order_id)
+        .maybeSingle();
+
+      if (error || !order) return NextResponse.json({ error: "주문을 찾을 수 없습니다" }, { status: 404 });
+      const result = await sendReviewRequestNotification(supabase, request.url, order);
+      return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+    }
+
+    if (!body.phone) {
+      return NextResponse.json({ error: "phone 필요" }, { status: 400 });
+    }
+
     const result = await sendOperationalNotification(supabase, {
       orderId: body.order_id,
       customerId: body.customer_id,
