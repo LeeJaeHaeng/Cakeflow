@@ -122,10 +122,24 @@ function ToolButton({
   );
 }
 
+function dataUrlToBlob(dataURL: string) {
+  const [header, base64] = dataURL.split(",");
+  if (!base64) throw new Error("시뮬레이터 미리보기 생성 실패");
+
+  const mimeType = header.match(/^data:([^;]+);base64$/)?.[1] ?? "application/octet-stream";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mimeType });
+}
+
 async function stageToPreviewBlob(stage: Konva.Stage) {
   for (const pixelRatio of [2, 1.5, 1]) {
     const dataURL = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
-    const blob = await fetch(dataURL).then((res) => res.blob());
+    const blob = dataUrlToBlob(dataURL);
     if (blob.size <= MAX_PREVIEW_UPLOAD_BYTES || pixelRatio === 1) {
       return { dataURL, blob };
     }

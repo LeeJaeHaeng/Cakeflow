@@ -65,3 +65,9 @@
 - 관리자 주문 수정/상태/견적 확정 API의 DB capacity 오류 매핑 완료
 - README, 운영 handoff, Supabase preview 문서 갱신 완료
 - 검증 완료: `npm.cmd run lint`, `npx.cmd tsc --noEmit`, `npm.cmd run build`, `npm.cmd run verify:parity`, `git diff --check`
+
+## 배포 후 핫픽스
+
+- 시뮬레이터 주문 이동 시 CSP가 `blob:` worker 생성을 막는 문제 확인
+- `stage.toDataURL()` 결과를 `fetch(data:image...)`로 변환하지 않고 직접 Blob으로 변환하도록 수정
+- CSP에 `worker-src 'self' blob:`을 추가하고 배경 제거 asset fetch용 `https://bundle.imgly.com`을 `connect-src`에 추가
