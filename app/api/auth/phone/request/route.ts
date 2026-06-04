@@ -5,10 +5,6 @@ import { PHONE_AUTH_DISABLED, phoneAuthDisabledResponse } from "@/lib/phone-auth
 
 export async function POST(request: Request) {
   try {
-    if (PHONE_AUTH_DISABLED) {
-      return NextResponse.json(phoneAuthDisabledResponse(), { status: 503 });
-    }
-
     const { phone: rawPhone } = await request.json();
 
     const phone = normalizeKoreanMobile(rawPhone);
@@ -17,6 +13,14 @@ export async function POST(request: Request) {
         { error: "올바른 휴대폰 번호를 입력해주세요. (010으로 시작하는 11자리)" },
         { status: 400 }
       );
+    }
+
+    if (PHONE_AUTH_DISABLED) {
+      return NextResponse.json({
+        ...phoneAuthDisabledResponse(),
+        request_id: "phone-auth-disabled",
+        expires_in: 0,
+      });
     }
 
     const result = await requestOtp(phone);

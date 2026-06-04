@@ -6,7 +6,10 @@ import { PHONE_AUTH_DISABLED, phoneAuthDisabledResponse } from "@/lib/phone-auth
 export async function POST(request: Request) {
   try {
     if (PHONE_AUTH_DISABLED) {
-      return NextResponse.json(phoneAuthDisabledResponse(), { status: 503 });
+      return NextResponse.json({
+        ...phoneAuthDisabledResponse(),
+        token: "phone-auth-disabled",
+      });
     }
 
     const { request_id, code } = await request.json();
